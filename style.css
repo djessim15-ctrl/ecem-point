@@ -1,0 +1,58 @@
+/* Mobile d’abord : aucune taille de texte n’est inférieure à la base de 20 px. */
+:root { font-size: 20px; --fond: #f3f6fa; --encre: #14283d; --bleu: #123f78; --bord: #66798e; --erreur: #851c24; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--fond); color: var(--encre); font: 1rem/1.6 system-ui, -apple-system, sans-serif; }
+button, input, select, textarea { font: inherit; }
+button { min-height: 52px; padding: .65rem 1rem; border: 2px solid var(--bleu); border-radius: .65rem; background: var(--bleu); color: white; font-weight: 700; cursor: pointer; white-space: normal; overflow-wrap: anywhere; }
+button:hover:not(:disabled) { background: #082c59; }
+button.secondaire { background: white; color: var(--bleu); }
+button.secondaire:hover:not(:disabled) { background: #e2eafa; }
+button.danger { background: var(--erreur); border-color: var(--erreur); }
+button:disabled { cursor: wait; opacity: .7; }
+:focus-visible { outline: 4px solid #a35400; outline-offset: 4px; }
+a { color: var(--bleu); }
+h1, h2, h3, p { overflow-wrap: anywhere; }
+h1 { font-size: 1.7rem; line-height: 1.25; margin: .3rem 0 1rem; }
+h2 { font-size: 1.5rem; line-height: 1.3; }
+h3 { font-size: 1.2rem; }
+p { margin: .5rem 0 1rem; }
+.entete, main, footer, nav, #message { max-width: 1150px; margin: auto; padding: 1rem; }
+.entete { background: white; border-bottom: 2px solid #b3c0d0; }
+.signature { font-size: 1rem; font-weight: 750; letter-spacing: .04em; }
+.outils, .raccourcis, .actions { display: flex; flex-wrap: wrap; gap: .6rem; margin: .6rem 0; }
+.outils button { flex: 1; }
+nav { display: flex; flex-wrap: wrap; gap: .5rem; }
+nav button { background: white; color: var(--bleu); flex: 1 1 10rem; }
+nav button:hover:not(:disabled), nav button[aria-current="page"] { background: var(--bleu); color: white; }
+main { min-height: 50vh; }
+section { max-width: 100%; }
+.carte, .solde-carte { background: white; border: 2px solid #b3c0d0; border-radius: .9rem; padding: 1rem; margin: .8rem 0; overflow-wrap: anywhere; }
+.solde-carte { background: #eaf2ff; border-color: var(--bleu); }
+.solde { font-size: 4rem; line-height: 1.15; font-weight: 800; margin: .7rem 0; }
+.unite { font-size: 1.4rem; }
+.points { font-size: 2rem; font-weight: 800; }
+.positif { color: #145832; }
+.negatif { color: var(--erreur); }
+form { display: flex; flex-direction: column; gap: .5rem; }
+label { font-weight: 700; }
+input, select, textarea { width: 100%; min-height: 52px; padding: .6rem; border: 2px solid var(--bord); border-radius: .45rem; background: white; color: var(--encre); }
+textarea { resize: vertical; }
+input[type="checkbox"] { width: 1.4rem; height: 1.4rem; min-height: 28px; flex: 0 0 auto; }
+.case { display: flex; align-items: center; gap: .6rem; min-height: 52px; }
+output { padding: .5rem; font-weight: 800; }
+.liste { display: grid; gap: .6rem; margin: 1rem 0; }
+.liste .carte { margin: 0; }
+.grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap: 1rem; }
+.date { color: #3a5067; font-size: 1rem; }
+.texte-libre { white-space: pre-wrap; overflow-wrap: anywhere; unicode-bidi: plaintext; }
+/* Le marqueur est posé automatiquement dès qu’un texte contient de l’arabe. */
+.arabe, [lang="ar"] { font-size: 1.4rem; line-height: 1.9; }
+#message { border: 3px solid #145832; background: #eaf8ed; color: #103a22; position: relative; }
+#message.erreur { border-color: var(--erreur); background: #fff1f1; color: #651219; }
+#blocage-idees { padding: 1rem; border: 3px solid var(--erreur); }
+footer { border-top: 2px solid #b3c0d0; }
+.evitement { position: absolute; top: -200px; left: 1rem; z-index: 10; padding: 1rem; background: white; }
+.evitement:focus { top: .5rem; }
+@media (min-width: 800px) { .entete { border-radius: 0 0 1rem 1rem; } form.carte { max-width: 38rem; } .raccourcis button { flex: 1; } }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }

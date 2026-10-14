@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cdn.jsdelivr.net; img-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+  <title>Les points de notre classe</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <a class="evitement" href="#contenu">Aller au contenu</a>
+  <header class="entete">
+    <div><p class="signature">NOTRE CLASSE · 18 ÉLÈVES</p><h1>Les points de la classe</h1></div>
+    <div class="outils"><button id="texte-plus" type="button" aria-label="Texte plus gros">Texte plus gros +</button><button id="texte-moins" type="button" aria-label="Texte plus petit">Texte plus petit −</button></div>
+    <p id="identite" hidden></p><button id="deconnexion" class="secondaire" type="button" hidden>Se déconnecter</button>
+  </header>
+  <div id="message" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+  <nav id="navigation" aria-label="Écrans de la classe" hidden>
+    <button type="button" data-ecran="accueil">Accueil</button>
+    <button type="button" data-ecran="historique">Mon historique</button>
+    <button type="button" data-ecran="envoi">Envoyer des points</button>
+    <button type="button" data-ecran="boutique">Boutique 3D</button>
+    <button type="button" data-ecran="commandes">Mes commandes</button>
+    <button type="button" data-ecran="idees" data-roles="eleve,suppleant">Mes idées</button>
+    <button type="button" data-ecran="delegue" data-roles="delegue">Espace délégué</button>
+    <button type="button" data-ecran="suppleant" data-roles="suppleant">Espace suppléant</button>
+    <button type="button" data-ecran="tchat" data-roles="delegue,suppleant">Tchat privé</button>
+  </nav>
+  <main id="contenu" tabindex="-1">
+    <section id="ecran-connexion" data-page>
+      <h2 tabindex="-1">Bienvenue dans la classe</h2>
+      <p>De bonnes notes, des échanges et des cadeaux imprimés en 3D. Connecte-toi avec ton prénom d’affichage.</p>
+      <form id="form-connexion" class="carte">
+        <label for="prenom-connexion">Ton prénom d’affichage</label>
+        <input id="prenom-connexion" name="prenom" autocomplete="username" maxlength="60" required placeholder="Exemple : Lina M">
+        <label for="mdp-connexion">Ton mot de passe</label>
+        <input id="mdp-connexion" name="mot_de_passe" type="password" autocomplete="current-password" required>
+        <button type="submit">Se connecter</button>
+      </form>
+      <p>Un problème de connexion ? Demande au professeur. Il n’y a pas d’inscription publique.</p>
+    </section>
+    <section id="ecran-mot-de-passe" data-page hidden>
+      <h2 tabindex="-1">Choisis ton mot de passe personnel</h2>
+      <p>Cette étape est obligatoire avant d’utiliser les points. Ne partage pas ton mot de passe.</p>
+      <form id="form-mot-de-passe" class="carte">
+        <label for="nouveau-mdp">Nouveau mot de passe (12 caractères minimum)</label>
+        <input id="nouveau-mdp" type="password" minlength="12" maxlength="128" autocomplete="new-password" required>
+        <label for="confirmation-mdp">Répète le nouveau mot de passe</label>
+        <input id="confirmation-mdp" type="password" minlength="12" maxlength="128" autocomplete="new-password" required>
+        <button type="submit">Changer mon mot de passe et continuer</button>
+      </form>
+    </section>
+    <section id="ecran-accueil" data-page hidden>
+      <h2 tabindex="-1">Mes points</h2>
+      <div class="solde-carte"><p>Mon solde disponible</p><p class="solde"><span id="solde">—</span> <span class="unite">points</span></p><p>Les points sont une monnaie de classe, pas de l’argent.</p></div>
+      <div class="raccourcis">
+        <button type="button" data-ecran="envoi">Envoyer à un camarade</button><button type="button" data-ecran="boutique">Choisir un cadeau 3D</button><button type="button" data-ecran="historique">Voir mes opérations</button>
+      </div>
+      <div class="carte"><h3>Comment gagner des points ?</h3><p>Sommative : 17 à 18,4 → 1 point ; 18,5 à 19,4 → 2 points ; 19,5 à 20 → 3 points.</p><p>Formative : 9 à 10 → 1 point. Seul le palier le plus haut compte.</p><p>Un délégué saisit ta note ; le site ne conserve jamais cette note.</p></div>
+    </section>
+    <section id="ecran-historique" data-page hidden><h2 tabindex="-1">Mon historique</h2><button type="button" data-actualiser>Actualiser</button><div id="liste-historique" class="liste"></div></section>
+    <section id="ecran-envoi" data-page hidden>
+      <h2 tabindex="-1">Envoyer des points</h2><p>Le destinataire reçoit exactement le montant envoyé.</p>
+      <form id="form-envoi" class="carte"><label for="destinataire">À qui ?</label><select id="destinataire" required></select><label for="montant">Nombre de points</label><input id="montant" type="number" min="1" max="1000000" step="1" inputmode="numeric" required><button type="submit">Vérifier et envoyer</button></form>
+    </section>
+    <section id="ecran-boutique" data-page hidden><h2 tabindex="-1">La boutique 3D</h2><p>Les points sont débités à la commande. Une impression ratée peut être annulée et remboursée par un suppléant.</p><button type="button" data-actualiser>Actualiser</button><div id="liste-cadeaux" class="grille"></div></section>
+    <section id="ecran-commandes" data-page hidden><h2 tabindex="-1">Mes commandes</h2><button type="button" data-actualiser>Actualiser</button><div id="liste-commandes" class="liste"></div></section>
+    <section id="ecran-idees" data-page hidden>
+      <h2 tabindex="-1">Mes idées pour la classe</h2><p id="blocage-idees" role="status" hidden>Tes idées sont bloquées jusqu’au déblocage par un délégué. Tu peux toujours lire les réponses.</p>
+      <form id="form-idee" class="carte"><label for="texte-idee">Ton idée (elle sera signée de ton prénom)</label><textarea id="texte-idee" maxlength="2000" rows="4" required></textarea><button type="submit">Envoyer mon idée</button></form><div id="liste-idees" class="liste"></div>
+    </section>
+    <section id="ecran-delegue" data-page hidden>
+      <h2 tabindex="-1">Espace délégué</h2><button type="button" data-actualiser>Actualiser cet espace</button>
+      <h3>Saisir une note</h3>
+      <form id="form-note" class="carte"><label for="eleve-note">Élève (sauf toi)</label><select id="eleve-note" required></select><label for="type-note">Type d’évaluation</label><select id="type-note"><option value="sommative">Sommative sur 20</option><option value="formative">Formative sur 10</option></select><label for="note">Note : arrondie à une décimale avant le calcul</label><input id="note" type="number" min="0" max="20" step="any" inputmode="decimal" required><output id="apercu-points" for="note type-note" aria-live="polite">Points calculés : —</output><button type="submit">Valider les points</button></form>
+      <h3>Tous les échanges</h3><p>L’annulation ajoute deux opérations inverses, sans effacer l’échange.</p><div id="liste-echanges" class="liste"></div>
+      <h3>Boîte à idées</h3><div id="boite-idees" class="liste"></div>
+      <h3>Bloquer ou débloquer les idées</h3><div id="liste-blocages" class="liste"></div>
+    </section>
+    <section id="ecran-suppleant" data-page hidden>
+      <h2 tabindex="-1">Espace suppléant</h2><button type="button" data-actualiser>Actualiser cet espace</button>
+      <h3 id="titre-cadeau">Ajouter un cadeau</h3>
+      <form id="form-cadeau" class="carte"><input id="cadeau-id" type="hidden"><label for="cadeau-nom">Nom du cadeau</label><input id="cadeau-nom" maxlength="100" required><label for="cadeau-description">Description</label><textarea id="cadeau-description" maxlength="1000" rows="3"></textarea><label for="cadeau-prix">Prix en points</label><input id="cadeau-prix" type="number" min="1" max="1000000" step="1" inputmode="numeric" required><label class="case"><input id="cadeau-actif" type="checkbox" checked> Disponible dans la boutique</label><button type="submit">Enregistrer le cadeau</button><button id="nouveau-cadeau" type="button" class="secondaire">Nouveau cadeau / abandonner la modification</button></form>
+      <h3>Catalogue</h3><div id="gestion-cadeaux" class="liste"></div><h3>Toutes les commandes</h3><div id="gestion-commandes" class="liste"></div>
+    </section>
+    <section id="ecran-tchat" data-page hidden>
+      <h2 tabindex="-1">Tchat privé de l’équipe</h2><p>Seulement les deux délégués et les deux suppléants.</p><p id="etat-tchat" role="status">Connexion au temps réel…</p><button type="button" data-actualiser>Actualiser les messages</button><div id="liste-tchat" class="liste" aria-label="Messages du tchat"></div>
+      <form id="form-tchat" class="carte"><label for="texte-tchat">Ton message</label><textarea id="texte-tchat" maxlength="2000" rows="3" required></textarea><button type="submit">Envoyer le message</button></form>
+    </section>
+  </main>
+  <footer><p>Avec l’accord du CPE / du professeur · Prénoms seulement · Aucun classement public des soldes.</p><p>Sur un appareil partagé, déconnecte-toi après utilisation.</p><noscript>JavaScript est nécessaire pour utiliser ce site.</noscript></footer>
+</body>
+</html>

@@ -1,0 +1,11 @@
+# Provisionnement local : ne jamais publier ces fichiers.
+creer_comptes.js
+comptes.csv
+.env
+.env.*
+*.secret
+*.secrets
+node_modules/
+.DS_Store
+# Archive de livraison générée, contenant seulement des modèles.
+livraison-classe.zip
