@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="ECEM Point — tableau de bord des points de la classe.">
+<meta name="theme-color" content="#4c1d95">
+<title>ECEM Point · Classe</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⭐</text></svg>">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+
+<body class="page-app">
+
+<!-- -------------------------------------------------------------------- -->
+<!-- Barre haute                                                          -->
+<!-- -------------------------------------------------------------------- -->
+<header class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="app.html">
+      <span class="brand-mark" aria-hidden="true">⭐</span>
+      <span class="brand-name">ECEM&nbsp;Point</span>
+    </a>
+
+    <div class="topbar-me">
+      <span class="presence" id="me-presence" title="Connecté">
+        <span class="dot" aria-hidden="true"></span>
+      </span>
+      <span class="me-prenom" id="me-prenom">…</span>
+      <span class="badge" id="me-role">…</span>
+      <span class="points-pill" id="me-points" hidden>
+        <span aria-hidden="true">⭐</span><strong id="me-points-value">0</strong>
+      </span>
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-logout">Quitter</button>
+    </div>
+  </div>
+
+  <nav class="tabbar" id="tabbar" aria-label="Sections"></nav>
+</header>
+
+<!-- -------------------------------------------------------------------- -->
+<!-- Chargement / erreurs bloquantes                                      -->
+<!-- -------------------------------------------------------------------- -->
+<div class="boot" id="boot">
+  <div class="spinner" aria-hidden="true"></div>
+  <p id="boot-text">Chargement de la classe…</p>
+</div>
+
+<main class="app-main is-hidden" id="app-main">
+
+  <!-- ============================ ACCUEIL ============================ -->
+  <section class="view" id="view-home" hidden>
+    <div id="home-content"></div>
+  </section>
+
+  <!-- ================== DONNER / RETIRER (encadrement) ================= -->
+  <section class="view" id="view-give" hidden>
+    <div class="view-head">
+      <h2>Gestion des points</h2>
+      <p class="sub">
+        Donne de <strong id="give-min">1</strong> à <strong id="give-max">4</strong> points,
+        ou retire le montant que tu veux.
+      </p>
+    </div>
+
+    <div id="give-notice"></div>
+
+    <div class="toolbar">
+      <div class="search">
+        <span aria-hidden="true">🔎</span>
+        <input type="search" id="give-search" placeholder="Chercher un prénom…" autocomplete="off">
+      </div>
+      <div class="switch">
+        <input type="checkbox" id="give-online-only" checked>
+        <label for="give-online-only">Élèves connectés seulement</label>
+      </div>
+      <span class="toolbar-count" id="give-count"></span>
+    </div>
+
+    <div class="student-grid" id="give-list"></div>
+  </section>
+
+  <!-- ====================== ENVOYER (élève) ========================== -->
+  <section class="view" id="view-send" hidden>
+    <div class="view-head">
+      <h2>Envoyer mes points</h2>
+      <p class="sub">
+        Tu as <strong id="send-balance">0</strong> point(s). Le transfert est immédiat
+        et apparaît dans l’historique des deux élèves.
+      </p>
+    </div>
+
+    <div class="toolbar">
+      <div class="search">
+        <span aria-hidden="true">🔎</span>
+        <input type="search" id="send-search" placeholder="Chercher un camarade…" autocomplete="off">
+      </div>
+      <div class="switch">
+        <input type="checkbox" id="send-online-only">
+        <label for="send-online-only">Connectés seulement</label>
+      </div>
+    </div>
+
+    <div class="student-grid" id="send-list"></div>
+  </section>
+
+  <!-- ========================== CLASSEMENT =========================== -->
+  <section class="view" id="view-rank" hidden>
+    <div class="view-head">
+      <h2>Classement</h2>
+      <p class="sub">Toute la classe, du plus grand nombre de points au plus petit.</p>
+    </div>
+    <div id="podium" class="podium"></div>
+    <div class="card">
+      <table class="rank-table">
+        <thead>
+          <tr><th>#</th><th>Prénom</th><th>Rôle</th><th class="num">Points</th><th>État</th></tr>
+        </thead>
+        <tbody id="rank-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ========================== HISTORIQUE =========================== -->
+  <section class="view" id="view-history" hidden>
+    <div class="view-head">
+      <h2 id="history-title">Historique</h2>
+      <p class="sub" id="history-sub"></p>
+    </div>
+
+    <div class="toolbar">
+      <div class="chips" id="history-filters">
+        <button type="button" class="chip is-active" data-kind="all">Tout</button>
+        <button type="button" class="chip" data-kind="gain">Gains</button>
+        <button type="button" class="chip" data-kind="retrait">Retraits</button>
+        <button type="button" class="chip" data-kind="transfert">Échanges</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <ul class="event-list" id="history-list"></ul>
+    </div>
+  </section>
+
+  <!-- ===================== TCHAT (encadrement) ======================= -->
+  <section class="view view-chat" id="view-chat" hidden>
+    <div class="chat-shell">
+      <div class="chat-head">
+        <h2>Tchat délégués ↔ suppléants</h2>
+        <p class="sub">Personne d’autre ne peut lire ni écrire ici.</p>
+        <div class="chat-members" id="chat-members"></div>
+      </div>
+      <div class="chat-log card" id="chat-log" aria-live="polite"></div>
+      <form class="chat-form" id="chat-form">
+        <input type="text" id="chat-input" maxlength="1000" autocomplete="off"
+               placeholder="Écris ton message…">
+        <button type="submit" class="btn btn-primary" id="chat-send">Envoyer</button>
+      </form>
+    </div>
+  </section>
+
+</main>
+
+<footer class="app-footer" id="app-footer" hidden>
+  <span id="footer-stats"></span>
+  <span class="sep" aria-hidden="true">·</span>
+  <span id="footer-live">temps réel activé</span>
+</footer>
+
+<script src="assets/vendor/supabase.js"></script>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/db.js"></script>
+<script src="assets/js/ui.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

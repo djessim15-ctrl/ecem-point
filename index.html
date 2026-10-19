@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="ECEM Point — les points de la classe gérés par les délégués et les suppléants.">
+<meta name="theme-color" content="#4c1d95">
+<title>ECEM Point · Connexion</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⭐</text></svg>">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+
+<body class="page-auth">
+<main class="auth-shell">
+
+  <!-- ------------------------------------------------------------------ -->
+  <!-- Présentation                                                        -->
+  <!-- ------------------------------------------------------------------ -->
+  <header class="auth-hero">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">⭐</span>
+      <span class="brand-name">ECEM&nbsp;Point</span>
+    </div>
+
+    <h1>Les points de la classe</h1>
+    <p class="lede">
+      Les <strong>délégués</strong> distribuent de <strong>1 à 4&nbsp;points</strong> aux élèves
+      connectés, peuvent en retirer autant qu’ils veulent, et les élèves
+      s’échangent leurs points entre eux.
+    </p>
+
+    <ul class="hero-points">
+      <li><span class="hero-ico" aria-hidden="true">🎯</span> +1 à +4 points par les délégués</li>
+      <li><span class="hero-ico" aria-hidden="true">➖</span> retrait du montant voulu</li>
+      <li><span class="hero-ico" aria-hidden="true">🔁</span> échange de points entre élèves</li>
+      <li><span class="hero-ico" aria-hidden="true">💬</span> tchat délégués ↔ suppléants</li>
+    </ul>
+  </header>
+
+  <!-- ------------------------------------------------------------------ -->
+  <!-- Connexion / Inscription                                             -->
+  <!-- ------------------------------------------------------------------ -->
+  <section class="card auth-card" aria-labelledby="tab-login">
+
+    <div class="tabs" role="tablist">
+      <button type="button" id="tab-login" class="tab is-active" role="tab"
+              aria-selected="true" aria-controls="form-login">Connexion</button>
+      <button type="button" id="tab-signup" class="tab" role="tab"
+              aria-selected="false" aria-controls="form-signup">Inscription</button>
+    </div>
+
+    <!-- ---------------- Connexion ---------------- -->
+    <form id="form-login" class="auth-form" novalidate>
+      <div class="field">
+        <label for="login-prenom">Ton prénom</label>
+        <input id="login-prenom" name="prenom" type="text" autocomplete="username"
+               placeholder="Ex. Léa" maxlength="24" required>
+      </div>
+
+      <div class="field">
+        <label for="login-password">Ton mot de passe</label>
+        <div class="field-with-eye">
+          <input id="login-password" name="password" type="password"
+                 autocomplete="current-password" placeholder="••••••••" required>
+          <button type="button" class="eye" data-target="login-password"
+                  aria-label="Afficher le mot de passe">👁</button>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block" id="btn-login">
+        <span class="btn-label">Se connecter</span>
+      </button>
+
+      <p class="hint">
+        Pas encore de compte&nbsp;? Passe sur l’onglet <strong>Inscription</strong>.
+      </p>
+    </form>
+
+    <!-- ---------------- Inscription ---------------- -->
+    <form id="form-signup" class="auth-form is-hidden" novalidate>
+      <div class="field">
+        <label for="signup-prenom">Ton prénom</label>
+        <input id="signup-prenom" name="prenom" type="text" autocomplete="nickname"
+               placeholder="Ex. Yanis" maxlength="24" required>
+        <p class="hint">Il est unique dans la classe&nbsp;: c’est ton identifiant.</p>
+      </div>
+
+      <fieldset class="field role-picker">
+        <legend>Je m’inscris comme</legend>
+        <div class="role-grid">
+          <label class="role-option">
+            <input type="radio" name="role" value="eleve" checked>
+            <span class="role-body">
+              <span class="role-title">Élève</span>
+              <span class="role-sub">reçoit, envoie et échange des points</span>
+            </span>
+          </label>
+
+          <label class="role-option">
+            <input type="radio" name="role" value="suppleant">
+            <span class="role-body">
+              <span class="role-title">Suppléant</span>
+              <span class="role-sub">tchat avec les délégués + suivi de la classe</span>
+            </span>
+          </label>
+
+          <label class="role-option">
+            <input type="radio" name="role" value="delegue">
+            <span class="role-body">
+              <span class="role-title">Délégué</span>
+              <span class="role-sub">donne et retire les points + tchat</span>
+            </span>
+          </label>
+        </div>
+      </fieldset>
+
+      <div class="field">
+        <label for="signup-password" id="signup-password-label">Mot de passe</label>
+        <div class="field-with-eye">
+          <input id="signup-password" name="password" type="password"
+                 autocomplete="new-password" placeholder="••••••••" minlength="6" required>
+          <button type="button" class="eye" data-target="signup-password"
+                  aria-label="Afficher le mot de passe">👁</button>
+        </div>
+        <p class="hint" id="signup-password-help">
+          Choisis un mot de passe de 6&nbsp;caractères minimum.
+        </p>
+      </div>
+
+      <div id="signup-staff-note" class="notice is-hidden">
+        <strong>Compte à responsabilité.</strong>
+        Le mot de passe attendu ici est le <span id="signup-staff-word">code</span>
+        confidentiel remis par la classe. Il ne fonctionne <strong>qu’une seule
+        fois</strong>&nbsp;: ensuite il devient ton mot de passe personnel.
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block" id="btn-signup">
+        <span class="btn-label">Créer mon compte</span>
+      </button>
+    </form>
+
+    <!-- Erreur / information -->
+    <div id="auth-alert" class="alert is-hidden" role="alert" aria-live="polite"></div>
+
+    <p class="auth-status" id="auth-status"></p>
+  </section>
+
+  <footer class="auth-footer">
+    <span>Propulsé par Supabase · aucune donnée ne quitte la classe</span>
+  </footer>
+</main>
+
+<noscript>
+  <p style="padding:24px;font-family:system-ui">Ce site a besoin de JavaScript.</p>
+</noscript>
+
+<script src="assets/vendor/supabase.js"></script>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/db.js"></script>
+<script src="assets/js/ui.js"></script>
+<script src="assets/js/auth.js"></script>
+</body>
+</html>
