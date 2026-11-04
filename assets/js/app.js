@@ -52,6 +52,7 @@
       { id: 'send', label: 'Envoyer des points', icon: 'send', group: 'Classe' },
       { id: 'rank', label: 'Classement', icon: 'trophy', group: 'Classe' },
       { id: 'history', label: 'Mon historique', icon: 'history', group: 'Classe' },
+      { id: 'tchat', label: 'Tchat de classe', icon: 'chat', group: 'Classe' },
       { id: 'stats', label: 'Statistiques', icon: 'chart', group: 'Analyse' },
       { id: 'badges', label: 'Succès', icon: 'award', group: 'Analyse' },
       { id: 'profile', label: 'Profil & réglages', icon: 'user', group: 'Compte' }
@@ -64,6 +65,7 @@
       { id: 'stats', label: 'Statistiques', icon: 'chart', group: 'Analyse' },
       { id: 'badges', label: 'Succès', icon: 'award', group: 'Analyse' },
       { id: 'chat', label: 'Tchat encadrement', icon: 'chat', group: 'Encadrement' },
+      { id: 'tchat', label: 'Tchat de classe', icon: 'chat', group: 'Encadrement' },
       { id: 'profile', label: 'Profil & réglages', icon: 'user', group: 'Compte' }
     ]
   };
@@ -359,7 +361,7 @@
 
     /* Le bouton flottant ne sert à rien sur les écrans d'action ou de saisie. */
     if (dom.fab) {
-      dom.fab.hidden = ['give', 'send', 'chat', 'profile'].indexOf(state.tab) !== -1;
+      dom.fab.hidden = ['give', 'send', 'chat', 'tchat', 'profile'].indexOf(state.tab) !== -1;
     }
 
     if (state.tab === 'chat') {
@@ -683,6 +685,11 @@
   function renderCurrent() {
     if (!Store.state.ready) return;
 
+    /* Le tchat de classe ne sonde la base que lorsqu'il est affiché. */
+    if (state.tab !== 'tchat' && window.ECEM && window.ECEM.ClassChat) {
+      window.ECEM.ClassChat.stop();
+    }
+
     /* Un écran qui plante ne doit jamais laisser la page vide : on isole le
      * rendu et, en cas d'erreur, on affiche une carte lisible dans la vue. */
     try {
@@ -695,6 +702,7 @@
         case 'history': renderHistory(); break;
         case 'badges': renderBadges(); break;
         case 'chat': renderChat(); break;
+        case 'tchat': renderTchat(); break;
         case 'profile': renderProfile(); break;
         default: renderHome();
       }
@@ -1759,6 +1767,26 @@
   /* ---------------------------------------------------------------------- */
   /* TCHAT                                                                  */
   /* ---------------------------------------------------------------------- */
+  /* ---------------------------------------------------------------------- */
+  /* Tchat de classe (filtre de gentillesse par IA)                         */
+  /* ---------------------------------------------------------------------- */
+  function renderTchat() {
+    var hote = document.getElementById('view-tchat');
+    if (!hote) return;
+
+    if (window.ECEM && window.ECEM.ClassChat) {
+      window.ECEM.ClassChat.mount(hote);
+      return;
+    }
+
+    UI.clear(hote);
+    hote.appendChild(UI.el('div', { class: 'empty' }, [
+      UI.el('span', { class: 'empty-ico' }, [UI.icon('chat', { size: 26 })]),
+      UI.el('div', { class: 'empty-title', text: 'Tchat indisponible' }),
+      UI.el('div', { class: 'empty-text', text: 'Le module du tchat de classe n’a pas pu se charger.' })
+    ]));
+  }
+
   function renderChat() {
     if (!Store.isStaff()) return;
 

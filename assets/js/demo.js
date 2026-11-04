@@ -212,6 +212,29 @@
     { id: 6, author_id: 'demo-suppleant', body: 'D’ailleurs le classement bouge pas mal cette semaine, Jade revient fort 🔥', created_at: iso(52 * 60000) }
   ];
 
+  /* Tchat de classe : messages de démonstration, dont un adouci par le filtre. */
+  var classMessages = [
+    {
+      id: 901, author_id: 'demo-eleve',
+      body: 'Bonjour à tous ! Est-ce que quelqu’un peut m’expliquer l’exercice 4 ?',
+      body_raw: null, level: 'genant', flagged: false, categories: [], severity: 0,
+      source: 'ia:gpt-oss-120b', created_at: iso(3.2 * 3600000)
+    },
+    {
+      id: 902, author_id: 'demo-eleve-2',
+      body: 'N’importe quoi, tu es vraiment un petit nuage… enfin, je respecte ton avis.',
+      body_raw: 'N’importe quoi, t’es vraiment un abruti', level: 'doux',
+      flagged: true, categories: ['insulte'], severity: 2,
+      source: 'ia:gpt-oss-120b', created_at: iso(2.1 * 3600000)
+    },
+    {
+      id: 903, author_id: 'demo-delegue',
+      body: 'Merci à tous pour votre calme, vous êtes absolument formidables ✨',
+      body_raw: null, level: 'ultra', flagged: false, categories: [], severity: 0,
+      source: 'ia:gpt-oss-120b', created_at: iso(0.6 * 3600000)
+    }
+  ];
+
   var settings = {
     id: 1,
     suppleant_can_award: true,
@@ -394,6 +417,63 @@
     claim_staff_code: function () { return 'demo-token'; },
     release_staff_code: function () { return true; },
     activate_account: function (args) { return { id: String(args.p_prenom), prenom: args.p_prenom, role: args.p_role, points: 0 }; },
+    class_chat_feed: function () { return classMessages.slice(); },
+    class_chat_send: function (args) {
+      var me = byId(db.meId);
+      var row = {
+        id: classMessages.length + 1000,
+        author_id: me ? me.id : profiles[0].id,
+        body: args.p_body,
+        body_raw: args.p_body_raw || null,
+        level: args.p_level || 'genant',
+        flagged: !!args.p_flagged,
+        categories: args.p_categories || [],
+        severity: args.p_severity || 0,
+        source: args.p_source || null,
+        created_at: new Date().toISOString()
+      };
+      classMessages.push(row);
+      return { id: row.id, created_at: row.created_at, flagged: row.flagged };
+    },
+    class_chat_delete: function (args) {
+      for (var i = classMessages.length - 1; i >= 0; i--) {
+        if (String(classMessages[i].id) === String(args.p_id)) classMessages.splice(i, 1);
+      }
+      return true;
+    },
+    moderation_log: function () { return null; },
+    moderation_stats: function () {
+      var drapeaux = classMessages.filter(function (m) { return m.flagged; });
+      var cats = {};
+      drapeaux.forEach(function (m) {
+        (m.categories || []).forEach(function (c) { cats[c] = (cats[c] || 0) + 1; });
+      });
+      return {
+        total: drapeaux.length,
+        dernier_jour: drapeaux.length,
+        par_niveau: {},
+        par_categorie: cats,
+        par_auteur: []
+      };
+    },
+    moderation_feed: function () {
+      return classMessages
+        .filter(function (m) { return m.flagged; })
+        .map(function (m) {
+          var auteur = byId(m.author_id);
+          return {
+            id: m.id,
+            author_id: m.author_id,
+            prenom: auteur ? auteur.prenom : 'Compte',
+            categories: m.categories || [],
+            severity: m.severity || 0,
+            level: m.level,
+            source: m.source || 'local',
+            excerpt: m.body_raw || '',
+            created_at: m.created_at
+          };
+        });
+    },
     my_role: function () { return getRole(); },
     is_staff: function () { return getRole() !== 'eleve'; },
     can_award: function () { return getRole() === 'delegue' || (getRole() === 'suppleant' && settings.suppleant_can_award); },
