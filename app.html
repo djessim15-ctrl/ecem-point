@@ -2,175 +2,349 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="ECEM Point — tableau de bord des points de la classe.">
-<meta name="theme-color" content="#4c1d95">
-<title>ECEM Point · Classe</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⭐</text></svg>">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="ECEM Point — tableau de bord des points de la classe : donner, échanger, suivre le classement et les statistiques.">
+<meta name="theme-color" content="#f6f5fb">
+<title>ECEM Point · Ma classe</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icons/icon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<link rel="preload" href="assets/fonts/inter-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/jakarta-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="assets/css/style.css">
+<script>
+  (function () {
+    try {
+      var stored = localStorage.getItem('ecem-theme');
+      var mode = stored ? JSON.parse(stored) : 'auto';
+      var dark = mode === 'dark' || (mode !== 'light' &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme-mode', mode);
+    } catch (e) {}
+  })();
+</script>
 </head>
 
 <body class="page-app">
+<a class="skip-link" href="#app-main">Aller au contenu</a>
 
-<!-- -------------------------------------------------------------------- -->
-<!-- Barre haute                                                          -->
-<!-- -------------------------------------------------------------------- -->
-<header class="topbar">
-  <div class="topbar-in">
-    <a class="brand" href="app.html">
-      <span class="brand-mark" aria-hidden="true">⭐</span>
+<div class="app-shell">
+
+  <!-- ================================================================== -->
+  <!-- Barre latérale                                                     -->
+  <!-- ================================================================== -->
+  <aside class="sidebar" id="sidebar" aria-label="Navigation latérale">
+    <a class="brand" href="app.html" id="brand-link">
+      <span class="brand-mark" aria-hidden="true"><span data-icon="star"></span></span>
       <span class="brand-name">ECEM&nbsp;Point</span>
     </a>
 
-    <div class="topbar-me">
-      <span class="presence" id="me-presence" title="Connecté">
-        <span class="dot" aria-hidden="true"></span>
-      </span>
-      <span class="me-prenom" id="me-prenom">…</span>
-      <span class="badge" id="me-role">…</span>
-      <span class="points-pill" id="me-points" hidden>
-        <span aria-hidden="true">⭐</span><strong id="me-points-value">0</strong>
-      </span>
-      <button type="button" class="btn btn-ghost btn-sm" id="btn-logout">Quitter</button>
+    <nav class="side-nav" id="side-nav" aria-label="Sections de l’application"></nav>
+
+    <div class="sidebar-foot">
+      <div class="side-status">
+        <span class="live" id="live-state">
+          <span class="dot" aria-hidden="true"></span>
+          <span id="live-text">connexion…</span>
+        </span>
+        <span id="footer-stats"></span>
+      </div>
+
+      <div class="side-user" id="side-user"></div>
+
+      <div class="side-tools">
+        <button type="button" class="icon-btn" id="btn-theme-side"
+                aria-label="Changer de thème" title="Clair / sombre / auto">
+          <span data-icon="palette"></span>
+        </button>
+        <button type="button" class="icon-btn" id="btn-logout"
+                aria-label="Se déconnecter" title="Se déconnecter">
+          <span data-icon="logout"></span>
+        </button>
+      </div>
     </div>
+  </aside>
+  <div class="sidebar-scrim" id="sidebar-scrim" aria-hidden="true"></div>
+
+  <!-- ================================================================== -->
+  <!-- Colonne principale                                                 -->
+  <!-- ================================================================== -->
+  <div class="app-body">
+    <header class="topbar">
+      <button type="button" class="icon-btn only-mobile" id="btn-menu"
+              aria-label="Ouvrir le menu" aria-controls="sidebar" aria-expanded="false">
+        <span data-icon="menu"></span>
+      </button>
+
+      <div class="topbar-title" id="topbar-title">
+        <span data-icon="home" aria-hidden="true"></span>
+        <span id="topbar-label">Accueil</span>
+      </div>
+
+      <div class="topbar-actions">
+        <button type="button" class="topbar-search" id="btn-palette" aria-label="Rechercher (Ctrl K)">
+          <span data-icon="search" aria-hidden="true"></span>
+          <span class="hide-sm">Rechercher…</span>
+          <kbd>Ctrl K</kbd>
+        </button>
+
+        <button type="button" class="icon-btn" id="btn-bell" aria-label="Notifications" title="Notifications">
+          <span data-icon="bell"></span>
+          <span class="bell-dot is-hidden" id="bell-dot"></span>
+        </button>
+
+        <button type="button" class="icon-btn hide-mobile" id="btn-theme"
+                aria-label="Changer de thème" title="Clair / sombre / auto">
+          <span data-icon="moon"></span>
+        </button>
+
+        <span class="points-pill" id="me-points" hidden>
+          <span data-icon="star" aria-hidden="true"></span>
+          <b id="me-points-value">0</b>
+        </span>
+
+        <button type="button" class="me-chip" id="btn-me" aria-label="Mon profil"></button>
+      </div>
+    </header>
+
+    <main class="app-main" id="app-main" tabindex="-1">
+      <div class="boot" id="boot">
+        <span class="boot-mark" aria-hidden="true"><span data-icon="star" data-size="30"></span></span>
+        <span class="spinner" aria-hidden="true"></span>
+        <p id="boot-text">Chargement de la classe…</p>
+      </div>
+
+      <div id="demo-strip-host"></div>
+
+      <!-- ============================ ACCUEIL ========================= -->
+      <section class="view" id="view-home" hidden aria-labelledby="home-title"></section>
+
+      <!-- ======================= DONNER / RETIRER ===================== -->
+      <section class="view" id="view-give" hidden aria-labelledby="give-title">
+        <div class="view-head">
+          <div>
+            <h2 id="give-title">Donner ou retirer des points</h2>
+            <p class="sub">
+              Donne de <strong id="give-min">1</strong> à <strong id="give-max">4</strong> points
+              en un geste, ou retire le montant de ton choix.
+            </p>
+          </div>
+          <div class="chips" id="give-hint"></div>
+        </div>
+
+        <div id="give-notice"></div>
+
+        <div class="toolbar">
+          <div class="search">
+            <span data-icon="search" aria-hidden="true"></span>
+            <input type="search" id="give-search" placeholder="Chercher un prénom…"
+                   autocomplete="off" aria-label="Chercher un élève">
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="give-online-only" checked>
+            <span class="switch-track" aria-hidden="true"></span>
+            <span class="switch-label">Connectés</span>
+          </label>
+          <span class="toolbar-count" id="give-count"></span>
+        </div>
+
+        <div class="students" id="give-list"></div>
+      </section>
+
+      <!-- =========================== ENVOYER ========================== -->
+      <section class="view" id="view-send" hidden aria-labelledby="send-title">
+        <div class="view-head">
+          <div>
+            <h2 id="send-title">Envoyer mes points</h2>
+            <p class="sub">
+              Le transfert est immédiat et apparaît dans l’historique des deux élèves.
+            </p>
+          </div>
+        </div>
+
+        <div class="balance-card">
+          <span class="balance-ico" aria-hidden="true"><span data-icon="star"></span></span>
+          <div>
+            <div class="balance-value" id="send-balance">0</div>
+            <div class="balance-label" id="send-balance-label">points disponibles</div>
+          </div>
+          <span class="spacer"></span>
+          <span class="pill pill--gold" id="send-min-hint"></span>
+        </div>
+
+        <div class="toolbar">
+          <div class="search">
+            <span data-icon="search" aria-hidden="true"></span>
+            <input type="search" id="send-search" placeholder="Chercher un camarade…"
+                   autocomplete="off" aria-label="Chercher un camarade">
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="send-online-only">
+            <span class="switch-track" aria-hidden="true"></span>
+            <span class="switch-label">Connectés</span>
+          </label>
+          <span class="toolbar-count" id="send-count"></span>
+        </div>
+
+        <div class="students" id="send-list"></div>
+      </section>
+
+      <!-- ========================= CLASSEMENT ========================= -->
+      <section class="view" id="view-rank" hidden aria-labelledby="rank-title">
+        <div class="view-head">
+          <div>
+            <h2 id="rank-title">Classement</h2>
+            <p class="sub">Toute la classe, du plus grand nombre de points au plus petit.</p>
+          </div>
+          <div class="segmented" id="rank-scope" role="group" aria-label="Période du classement">
+            <button type="button" class="seg-btn is-active" data-scope="all">Depuis toujours</button>
+            <button type="button" class="seg-btn" data-scope="week">7 derniers jours</button>
+          </div>
+        </div>
+
+        <div class="podium" id="podium"></div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <div class="panel-title"><span data-icon="users" aria-hidden="true"></span> Les élèves</div>
+              <div class="panel-sub" id="rank-sub"></div>
+            </div>
+            <div class="search" style="max-width:220px">
+              <span data-icon="search" aria-hidden="true"></span>
+              <input type="search" id="rank-search" placeholder="Filtrer…" aria-label="Filtrer le classement">
+            </div>
+          </div>
+          <div class="panel-body panel-body--flush">
+            <div class="rank-list" id="rank-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================== STATISTIQUES ======================== -->
+      <section class="view" id="view-stats" hidden aria-labelledby="stats-title">
+        <div class="view-head">
+          <div>
+            <h2 id="stats-title">Statistiques</h2>
+            <p class="sub">Ce que racontent les points de la classe — sur 7 jours et depuis le début.</p>
+          </div>
+          <span class="pill pill--muted" id="stats-scope"></span>
+        </div>
+        <div id="stats-content"></div>
+      </section>
+
+      <!-- ========================= HISTORIQUE ========================= -->
+      <section class="view" id="view-history" hidden aria-labelledby="history-title">
+        <div class="view-head">
+          <div>
+            <h2 id="history-title">Historique</h2>
+            <p class="sub" id="history-sub"></p>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-export">
+            <span data-icon="download" aria-hidden="true"></span> Exporter en CSV
+          </button>
+        </div>
+
+        <div class="toolbar">
+          <div class="chips" id="history-filters">
+            <button type="button" class="chip is-active" data-kind="all">Tout</button>
+            <button type="button" class="chip" data-kind="gain">Gains</button>
+            <button type="button" class="chip" data-kind="retrait">Retraits</button>
+            <button type="button" class="chip" data-kind="transfert">Échanges</button>
+          </div>
+          <span class="toolbar-count" id="history-count"></span>
+        </div>
+
+        <div class="panel">
+          <div class="panel-body" style="padding-top:8px">
+            <div class="timeline" id="history-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================== SUCCÈS =========================== -->
+      <section class="view" id="view-badges" hidden aria-labelledby="badges-title">
+        <div class="view-head">
+          <div>
+            <h2 id="badges-title">Succès</h2>
+            <p class="sub">Des objectifs à débloquer en gagnant, en donnant et en participant.</p>
+          </div>
+        </div>
+        <div id="badges-content"></div>
+      </section>
+
+      <!-- ============================ TCHAT =========================== -->
+      <section class="view" id="view-chat" hidden aria-labelledby="chat-title">
+        <div class="chat">
+          <div class="chat-head">
+            <div>
+              <h2 id="chat-title" style="font-size:1.35rem">Tchat de l’encadrement</h2>
+              <p class="sub">Délégués et suppléants uniquement. Personne d’autre ne peut lire ni écrire ici.</p>
+              <div class="chat-members" id="chat-members" style="margin-top:10px"></div>
+            </div>
+            <span class="pill pill--muted" id="chat-count"></span>
+          </div>
+
+          <div class="chat-log" id="chat-log" aria-live="polite" aria-label="Messages"></div>
+
+          <form class="chat-form" id="chat-form">
+            <button type="button" class="icon-btn emoji-btn" id="btn-emoji"
+                    aria-label="Insérer un emoji" aria-expanded="false">
+              <span data-icon="smile"></span>
+            </button>
+            <textarea class="chat-input" id="chat-input" rows="1" maxlength="1000"
+                      autocomplete="off" placeholder="Écris ton message… (Entrée pour envoyer)"
+                      aria-label="Ton message"></textarea>
+            <button type="submit" class="btn btn-primary chat-send" id="chat-send">
+              <span data-icon="send" aria-hidden="true"></span>
+              <span class="hide-sm">Envoyer</span>
+            </button>
+          </form>
+        </div>
+      </section>
+
+      <!-- =========================== PROFIL =========================== -->
+      <section class="view" id="view-profile" hidden aria-labelledby="profile-title">
+        <div class="view-head">
+          <div>
+            <h2 id="profile-title">Mon profil</h2>
+            <p class="sub">Ton compte, tes préférences et tes données.</p>
+          </div>
+        </div>
+        <div id="profile-content"></div>
+      </section>
+
+    </main>
   </div>
-
-  <nav class="tabbar" id="tabbar" aria-label="Sections"></nav>
-</header>
-
-<!-- -------------------------------------------------------------------- -->
-<!-- Chargement / erreurs bloquantes                                      -->
-<!-- -------------------------------------------------------------------- -->
-<div class="boot" id="boot">
-  <div class="spinner" aria-hidden="true"></div>
-  <p id="boot-text">Chargement de la classe…</p>
 </div>
 
-<main class="app-main is-hidden" id="app-main">
+<!-- Navigation mobile -->
+<nav class="bottom-nav" id="bottom-nav" aria-label="Navigation rapide"></nav>
+<button type="button" class="fab" id="fab" aria-label="Donner ou envoyer des points">
+  <span data-icon="plus"></span>
+</button>
 
-  <!-- ============================ ACCUEIL ============================ -->
-  <section class="view" id="view-home" hidden>
-    <div id="home-content"></div>
-  </section>
+<div class="toast-zone" id="toast-zone" aria-live="polite"></div>
+<div id="modal-root"></div>
 
-  <!-- ================== DONNER / RETIRER (encadrement) ================= -->
-  <section class="view" id="view-give" hidden>
-    <div class="view-head">
-      <h2>Gestion des points</h2>
-      <p class="sub">
-        Donne de <strong id="give-min">1</strong> à <strong id="give-max">4</strong> points,
-        ou retire le montant que tu veux.
-      </p>
-    </div>
-
-    <div id="give-notice"></div>
-
-    <div class="toolbar">
-      <div class="search">
-        <span aria-hidden="true">🔎</span>
-        <input type="search" id="give-search" placeholder="Chercher un prénom…" autocomplete="off">
-      </div>
-      <div class="switch">
-        <input type="checkbox" id="give-online-only" checked>
-        <label for="give-online-only">Élèves connectés seulement</label>
-      </div>
-      <span class="toolbar-count" id="give-count"></span>
-    </div>
-
-    <div class="student-grid" id="give-list"></div>
-  </section>
-
-  <!-- ====================== ENVOYER (élève) ========================== -->
-  <section class="view" id="view-send" hidden>
-    <div class="view-head">
-      <h2>Envoyer mes points</h2>
-      <p class="sub">
-        Tu as <strong id="send-balance">0</strong> point(s). Le transfert est immédiat
-        et apparaît dans l’historique des deux élèves.
-      </p>
-    </div>
-
-    <div class="toolbar">
-      <div class="search">
-        <span aria-hidden="true">🔎</span>
-        <input type="search" id="send-search" placeholder="Chercher un camarade…" autocomplete="off">
-      </div>
-      <div class="switch">
-        <input type="checkbox" id="send-online-only">
-        <label for="send-online-only">Connectés seulement</label>
-      </div>
-    </div>
-
-    <div class="student-grid" id="send-list"></div>
-  </section>
-
-  <!-- ========================== CLASSEMENT =========================== -->
-  <section class="view" id="view-rank" hidden>
-    <div class="view-head">
-      <h2>Classement</h2>
-      <p class="sub">Toute la classe, du plus grand nombre de points au plus petit.</p>
-    </div>
-    <div id="podium" class="podium"></div>
-    <div class="card">
-      <table class="rank-table">
-        <thead>
-          <tr><th>#</th><th>Prénom</th><th>Rôle</th><th class="num">Points</th><th>État</th></tr>
-        </thead>
-        <tbody id="rank-body"></tbody>
-      </table>
-    </div>
-  </section>
-
-  <!-- ========================== HISTORIQUE =========================== -->
-  <section class="view" id="view-history" hidden>
-    <div class="view-head">
-      <h2 id="history-title">Historique</h2>
-      <p class="sub" id="history-sub"></p>
-    </div>
-
-    <div class="toolbar">
-      <div class="chips" id="history-filters">
-        <button type="button" class="chip is-active" data-kind="all">Tout</button>
-        <button type="button" class="chip" data-kind="gain">Gains</button>
-        <button type="button" class="chip" data-kind="retrait">Retraits</button>
-        <button type="button" class="chip" data-kind="transfert">Échanges</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <ul class="event-list" id="history-list"></ul>
-    </div>
-  </section>
-
-  <!-- ===================== TCHAT (encadrement) ======================= -->
-  <section class="view view-chat" id="view-chat" hidden>
-    <div class="chat-shell">
-      <div class="chat-head">
-        <h2>Tchat délégués ↔ suppléants</h2>
-        <p class="sub">Personne d’autre ne peut lire ni écrire ici.</p>
-        <div class="chat-members" id="chat-members"></div>
-      </div>
-      <div class="chat-log card" id="chat-log" aria-live="polite"></div>
-      <form class="chat-form" id="chat-form">
-        <input type="text" id="chat-input" maxlength="1000" autocomplete="off"
-               placeholder="Écris ton message…">
-        <button type="submit" class="btn btn-primary" id="chat-send">Envoyer</button>
-      </form>
-    </div>
-  </section>
-
-</main>
-
-<footer class="app-footer" id="app-footer" hidden>
-  <span id="footer-stats"></span>
-  <span class="sep" aria-hidden="true">·</span>
-  <span id="footer-live">temps réel activé</span>
-</footer>
+<noscript>
+  <p style="padding:24px;font-family:system-ui">Ce site a besoin de JavaScript.</p>
+</noscript>
 
 <script src="assets/vendor/supabase.js"></script>
 <script src="assets/js/config.js"></script>
-<script src="assets/js/db.js"></script>
+<script src="assets/js/theme.js"></script>
+<script src="assets/js/icons.js"></script>
 <script src="assets/js/ui.js"></script>
+<script src="assets/js/fx.js"></script>
+<script src="assets/js/charts.js"></script>
+<script src="assets/js/insights.js"></script>
+<script src="assets/js/demo.js"></script>
+<script src="assets/js/db.js"></script>
+<script src="assets/js/data.js"></script>
 <script src="assets/js/app.js"></script>
+<script src="assets/js/pwa.js"></script>
 </body>
 </html>

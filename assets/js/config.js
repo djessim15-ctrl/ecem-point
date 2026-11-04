@@ -17,7 +17,14 @@ window.ECEM_CONFIG = {
 
   /* Nom affiché dans l'interface. */
   APP_NAME: 'ECEM Point',
+  APP_VERSION: '2.0',
 
   /* Intervalle du battement de cœur qui marque un compte comme « connecté ». */
-  HEARTBEAT_MS: 25000
+  HEARTBEAT_MS: 25000,
+
+  /* Rafraîchissement de secours si le temps réel décroche. */
+  REFRESH_MS: 60000,
+
+  /* Objectif hebdomadaire affiché sur le tableau de bord (points reçus). */
+  WEEKLY_GOAL: 15
 };
