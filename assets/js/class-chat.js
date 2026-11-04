@@ -1,24 +1,27 @@
 /* ============================================================================
- * ECEM Point — Tchat de classe avec « filtre de gentillesse »
+ * ECEM Point — Tchats (classe + privés) avec « filtre de gentillesse »
  * ----------------------------------------------------------------------------
- * Tous les comptes connectés discutent ici. Avant publication, le message passe
- * par une IA (GPT-OSS 120B via Groq, appelée depuis l'Edge Function `moderate`)
- * qui repère insultes, gros mots, spam, harcèlement, agressivité, flood ou
- * majuscules agressives, puis le réécrit en trois versions de plus en plus
- * gentilles : Doux, Gênant, Ultra.
+ * Deux espaces :
+ *   • Classe   : tout le monde se parle, messages visibles par tous.
+ *   • Privés   : conversations 1 à 1 entre deux comptes.
+ *
+ * Dans les deux cas, chaque message passe par une IA (GPT-OSS 120B via Groq,
+ * appelée depuis l'Edge Function `moderate`) qui repère insultes, gros mots,
+ * spam, harcèlement, agressivité, flood ou majuscules agressives, puis le
+ * réécrit en trois versions de plus en plus gentilles : Doux, Gênant, Ultra.
+ * Le filtre s'applique à TOUT LE MONDE, délégués et suppléants compris.
+ *
+ * Délégués et suppléants sont modérateurs : ils voient dans « Détections » les
+ * messages privés signalés et peuvent les supprimer. Ils ne lisent pas les
+ * conversations privées ordinaires.
  *
  * Rien ne dépend du réseau pour rester utilisable : si l'IA ne répond pas
- * (hors-ligne, quota, panne), un filtre local prend le relais et le message
- * part quand même, adouci.
- *
- * L'original d'un message n'est renvoyé qu'à son auteur et à l'encadrement :
- * c'est la fonction SQL class_chat_feed() qui masque la colonne aux autres.
+ * (hors-ligne, quota, panne), un filtre local prend le relais.
  * ==========================================================================*/
 (function () {
   'use strict';
 
   var UI = window.ECEM && window.ECEM.UI;
-  var ECEM = window.ECEM || {};
 
   var LS_KEY = 'ecem-tchat-classe';
   var RAFRAICHIR_MS = 10000;
@@ -83,14 +86,21 @@
     filtre: prefs.filtre,
     niveau: prefs.niveau,
     statsOuvertes: prefs.stats,
+    onglet: 'classe',
     messages: [],
     stats: null,
     journal: [],
+    signales: [],
+    fils: [],
+    fil: null,
+    messagesPrives: [],
+    choixOuvert: false,
+    choixRecherche: '',
     erreur: null,
     statut: '',
-    originaux: {},
     minuteur: null,
-    dernierChargement: 0
+    dernierChargement: 0,
+    autoOuvert: false
   };
 
   var racine = null;
@@ -104,20 +114,47 @@
     return !!(window.ECEM && window.ECEM.demo);
   }
 
-  function moi() {
-    var store = window.ECEM && window.ECEM.Store;
-    return (store && store.state && store.state.me) || null;
-  }
-
   function estStaff() {
     var store = window.ECEM && window.ECEM.Store;
     return !!(store && store.isStaff && store.isStaff());
   }
 
-  function nomDe(id) {
+  function profils() {
     var store = window.ECEM && window.ECEM.Store;
-    if (store && store.nameOf) return store.nameOf(id);
-    return 'Compte';
+    return (store && store.state && store.state.profiles) || [];
+  }
+
+  function monId() {
+    var store = window.ECEM && window.ECEM.Store;
+    return store && store.state && store.state.me ? store.state.me.id : null;
+  }
+
+  function profilDe(id) {
+    var liste = profils();
+    for (var i = 0; i < liste.length; i++) if (liste[i].id === id) return liste[i];
+    return null;
+  }
+
+  function nomDe(id) {
+    var profil = profilDe(id);
+    if (profil) return profil.prenom;
+    var store = window.ECEM && window.ECEM.Store;
+    return (store && store.nameOf && store.nameOf(id)) || 'Compte';
+  }
+
+  function rpc(nom, args) {
+    var client = sb();
+    if (!client || typeof client.rpc !== 'function') {
+      return Promise.resolve({ data: null, error: { message: 'HORS_LIGNE' } });
+    }
+    try {
+      return Promise.resolve(client.rpc(nom, args || {})).then(
+        function (res) { return res || { data: null, error: { message: 'REPONSE_VIDE' } }; },
+        function (erreur) { return { data: null, error: erreur }; }
+      );
+    } catch (erreur) {
+      return Promise.resolve({ data: null, error: erreur });
+    }
   }
 
   /* --------------------------------------------------------------------------
@@ -298,12 +335,29 @@
   }
 
   /* --------------------------------------------------------------------------
-   * Chargement des données
+   * Chargement
    * ----------------------------------------------------------------------- */
+  function messageErreur(erreur) {
+    var texte = String((erreur && (erreur.message || erreur.hint)) || erreur || '');
+    if (texte.indexOf('TROP_VITE') !== -1) return 'Doucement : tu envoies trop de messages d’affilée.';
+    if (texte.indexOf('NON_CONNECTE') !== -1) return 'Ta session a expiré : reconnecte-toi.';
+    if (texte.indexOf('MESSAGE_VIDE') !== -1) return 'Le message est vide.';
+    if (texte.indexOf('NIVEAU_INVALIDE') !== -1) return 'Niveau de gentillesse inconnu.';
+    if (texte.indexOf('DESTINATAIRE') !== -1) return 'Ce destinataire n’existe plus.';
+    if (texte.indexOf('INTERDIT') !== -1) return 'Action réservée aux délégués et suppléants.';
+    if (texte.indexOf('HORS_LIGNE') !== -1 || texte.indexOf('REPONSE_VIDE') !== -1) {
+      return 'Le tchat a besoin d’une connexion à la base.';
+    }
+    if (texte.indexOf('JWT') !== -1 || texte.indexOf('permission') !== -1) {
+      return 'La base refuse l’accès au tchat (session ou droits à vérifier).';
+    }
+    return 'Le tchat n’a pas pu se charger. Réessaie dans un instant.';
+  }
+
   function charger(silencieux) {
-    var client = sb();
-    if (!client || !client.rpc) {
+    if (!sb()) {
       etat.erreur = 'Le tchat a besoin d’une connexion à la base.';
+      peindre();
       return Promise.resolve();
     }
 
@@ -312,25 +366,49 @@
       peindre();
     }
 
-    var appels = [
-      client.rpc('class_chat_feed', { p_limit: 200 }),
-      client.rpc('moderation_stats'),
-      client.rpc('moderation_feed', { p_limit: 40 })
-    ];
+    var taches = {
+      feed: rpc('class_chat_feed', { p_limit: 200 }),
+      stats: rpc('moderation_stats'),
+      journal: rpc('moderation_feed', { p_limit: 40 })
+    };
 
-    return Promise.all(appels)
-      .then(function (resultats) {
-        var feed = resultats[0] || {};
-        var stats = resultats[1] || {};
-        var journal = resultats[2] || {};
+    if (etat.onglet === 'prive') {
+      taches.fils = rpc('private_threads');
+      if (etat.fil) taches.fil = rpc('private_feed', { p_with: etat.fil, p_limit: 200 });
+    }
 
-        if (feed.error) throw feed.error;
+    if (estStaff()) {
+      taches.signales = rpc('private_flagged', { p_limit: 30 });
+    }
 
-        etat.messages = Array.isArray(feed.data) ? feed.data : [];
-        etat.stats = !stats.error && stats.data ? stats.data : null;
-        etat.journal = !journal.error && Array.isArray(journal.data) ? journal.data : [];
+    return Promise.all(
+      Object.keys(taches).map(function (cle) {
+        return taches[cle].then(function (res) { return { cle: cle, res: res }; });
+      })
+    )
+      .then(function (paires) {
+        paires.forEach(function (paire) {
+          var res = paire.res;
+          if (res.error) {
+            if (paire.cle === 'feed') throw res.error;
+            return;
+          }
+          if (paire.cle === 'feed') etat.messages = res.data || [];
+          if (paire.cle === 'stats') etat.stats = res.data || null;
+          if (paire.cle === 'journal') etat.journal = res.data || [];
+          if (paire.cle === 'fils') etat.fils = res.data || [];
+          if (paire.cle === 'fil') etat.messagesPrives = res.data || [];
+          if (paire.cle === 'signales') etat.signales = res.data || [];
+        });
         etat.erreur = null;
         etat.dernierChargement = Date.now();
+
+        /* Première ouverture de l'onglet privé : on ouvre la conversation
+           la plus récente pour ne pas laisser l'écran vide. */
+        if (etat.onglet === 'prive' && !etat.fil && etat.fils.length) {
+          etat.fil = etat.fils[0].other_id;
+          etat.autoOuvert = true;
+        }
       })
       .catch(function (erreur) {
         etat.erreur = messageErreur(erreur);
@@ -338,24 +416,18 @@
       })
       .then(function () {
         etat.chargement = false;
+
+        if (etat.autoOuvert) {
+          etat.autoOuvert = false;
+          return charger(true);
+        }
+
         peindre();
       });
   }
 
-  function messageErreur(erreur) {
-    var texte = String((erreur && (erreur.message || erreur.hint)) || erreur || '');
-    if (texte.indexOf('TROP_VITE') !== -1) return 'Doucement : tu envoies trop de messages d’affilée.';
-    if (texte.indexOf('NON_CONNECTE') !== -1) return 'Ta session a expiré : reconnecte-toi.';
-    if (texte.indexOf('MESSAGE_VIDE') !== -1) return 'Le message est vide.';
-    if (texte.indexOf('NIVEAU_INVALIDE') !== -1) return 'Niveau de gentillesse inconnu.';
-    if (texte.indexOf('JWT') !== -1 || texte.indexOf('permission') !== -1) {
-      return 'La base refuse l’accès au tchat (session ou droits à vérifier).';
-    }
-    return 'Le tchat n’a pas pu se charger. Réessaie dans un instant.';
-  }
-
   /* --------------------------------------------------------------------------
-   * Peinture de l'interface
+   * Montage / démontage
    * ----------------------------------------------------------------------- */
   function monter(root) {
     racine = root;
@@ -371,8 +443,7 @@
 
     if (!etat.minuteur) {
       etat.minuteur = window.setInterval(function () {
-        if (document.hidden) return;
-        if (!etat.monte) return;
+        if (document.hidden || !etat.monte) return;
         charger(true);
       }, RAFRAICHIR_MS);
     }
@@ -386,15 +457,13 @@
     }
   }
 
+  /* --------------------------------------------------------------------------
+   * Construction de l'interface
+   * ----------------------------------------------------------------------- */
   function construire() {
     UI.clear(racine);
 
-    dom.titre = UI.el('h2', { id: 'tchat-title', text: 'Tchat de la classe' });
-    dom.sousTitre = UI.el('p', {
-      class: 'sub',
-      text: 'Tout le monde se parle ici. Un filtre de gentillesse relit les messages avant publication.'
-    });
-
+    /* --- en-tête ------------------------------------------------------- */
     dom.bascule = UI.el('button', {
       type: 'button',
       class: 'tchat-switch',
@@ -403,7 +472,10 @@
         etat.filtre = !etat.filtre;
         garderPrefs();
         peindre();
-        UI.toast(etat.filtre ? 'Filtre de gentillesse activé.' : 'Filtre désactivé : les messages partent tels quels.', etat.filtre ? 'success' : 'warning');
+        UI.toast(
+          etat.filtre ? 'Filtre de gentillesse activé.' : 'Filtre désactivé : les messages partent tels quels.',
+          etat.filtre ? 'success' : 'warning'
+        );
       }
     }, [
       UI.el('span', { class: 'tchat-switch-rail' }, [UI.el('span', { class: 'tchat-switch-knob' })]),
@@ -439,69 +511,159 @@
 
     dom.compteur = UI.el('span', { class: 'pill pill--muted' });
 
-    dom.panneauStats = UI.el('div', { class: 'tchat-stats', hidden: true });
+    dom.entete = UI.el('div', { class: 'tchat-head' }, [
+      UI.el('div', { class: 'tchat-head-txt' }, [
+        UI.el('h2', { id: 'tchat-title', text: 'Tchats' }),
+        UI.el('p', {
+          class: 'sub',
+          text: 'Un filtre de gentillesse relit chaque message, public comme privé, avant publication.'
+        })
+      ]),
+      UI.el('div', { class: 'tchat-outils' }, [dom.bascule, dom.niveaux, dom.btnStats, dom.compteur])
+    ]);
 
+    /* --- onglets ------------------------------------------------------- */
+    dom.onglets = UI.el('div', { class: 'tchat-onglets', role: 'tablist' }, [
+      boutonOnglet('classe', 'Classe', 'chat'),
+      boutonOnglet('prive', 'Messages privés', 'send')
+    ]);
+
+    /* --- panneau « classe » ------------------------------------------- */
     dom.log = UI.el('div', {
       class: 'chat-log tchat-log',
       'aria-live': 'polite',
       'aria-label': 'Messages du tchat de classe'
     });
 
-    dom.champ = UI.el('textarea', {
-      class: 'chat-input',
-      rows: '1',
-      maxlength: String(MAX_CARACTERES),
-      autocomplete: 'off',
-      placeholder: 'Écris ton message… (Entrée pour envoyer)',
-      'aria-label': 'Ton message'
-    });
-
-    dom.champ.addEventListener('input', function () {
-      dom.champ.style.height = 'auto';
-      dom.champ.style.height = Math.min(160, dom.champ.scrollHeight) + 'px';
-    });
-
-    dom.champ.addEventListener('keydown', function (evenement) {
-      if (evenement.key === 'Enter' && !evenement.shiftKey) {
-        evenement.preventDefault();
-        envoyer();
-      }
-    });
-
-    dom.btnEnvoyer = UI.el('button', {
-      type: 'submit',
-      class: 'btn btn-primary chat-send'
-    }, [UI.icon('send', { size: 17 }), UI.el('span', { class: 'hide-sm', text: 'Envoyer' })]);
-
+    dom.champ = creerChamp('Écris à la classe… (Entrée pour envoyer)');
+    dom.btnEnvoyer = boutonEnvoi();
     dom.form = UI.el('form', {
       class: 'chat-form',
       onsubmit: function (evenement) {
         evenement.preventDefault();
-        envoyer();
+        envoyer(null);
       }
     }, [dom.champ, dom.btnEnvoyer]);
 
-    dom.statut = UI.el('p', { class: 'tchat-statut', 'aria-live': 'polite' });
+    dom.panneauClasse = UI.el('div', { class: 'tchat-panneau', dataset: { panneau: 'classe' } }, [
+      dom.log,
+      dom.form
+    ]);
+
+    /* --- panneau « privés » ------------------------------------------- */
+    dom.filsListe = UI.el('div', { class: 'tchat-fils-liste' });
+    dom.filEntete = UI.el('div', { class: 'tchat-fil-entete' });
+    dom.filLog = UI.el('div', {
+      class: 'chat-log tchat-log tchat-fil-log',
+      'aria-live': 'polite',
+      'aria-label': 'Messages privés'
+    });
+    dom.filChamp = creerChamp('Écris en privé… (Entrée pour envoyer)');
+    dom.filEnvoyer = boutonEnvoi();
+    dom.filForm = UI.el('form', {
+      class: 'chat-form',
+      onsubmit: function (evenement) {
+        evenement.preventDefault();
+        envoyer(etat.fil);
+      }
+    }, [dom.filChamp, dom.filEnvoyer]);
+
+    dom.filBloc = UI.el('div', { class: 'tchat-fil' }, [dom.filEntete, dom.filLog, dom.filForm]);
+
+    dom.choix = UI.el('div', { class: 'tchat-choix', hidden: true });
+
+    dom.filsBouton = UI.el('button', {
+      type: 'button',
+      class: 'btn btn-soft btn-sm btn-block',
+      onclick: function () {
+        etat.choixOuvert = !etat.choixOuvert;
+        etat.choixRecherche = '';
+        peindre();
+      }
+    }, [UI.icon('plus', { size: 15 }), UI.el('span', { text: 'Nouvelle conversation' })]);
+
+    dom.panneauPrive = UI.el('div', { class: 'tchat-panneau', dataset: { panneau: 'prive' }, hidden: true }, [
+      UI.el('div', { class: 'tchat-prive' }, [
+        UI.el('aside', { class: 'tchat-fils' }, [
+          dom.filsBouton,
+          dom.choix,
+          dom.filsListe
+        ]),
+        dom.filBloc
+      ])
+    ]);
+
+    /* --- panneau détections ------------------------------------------- */
+    dom.panneauStats = UI.el('div', { class: 'tchat-stats', hidden: true });
 
     dom.alerte = UI.el('div', { class: 'alert alert--error is-hidden' });
-
-    dom.entete = UI.el('div', { class: 'tchat-head' }, [
-      UI.el('div', { class: 'tchat-head-txt' }, [dom.titre, dom.sousTitre]),
-      UI.el('div', { class: 'tchat-outils' }, [dom.bascule, dom.niveaux, dom.btnStats, dom.compteur])
-    ]);
+    dom.statut = UI.el('p', { class: 'tchat-statut', 'aria-live': 'polite' });
 
     racine.appendChild(
       UI.el('div', { class: 'tchat' }, [
         dom.entete,
         dom.alerte,
+        dom.onglets,
         dom.panneauStats,
-        dom.log,
-        dom.form,
+        dom.panneauClasse,
+        dom.panneauPrive,
         dom.statut
       ])
     );
   }
 
+  function boutonOnglet(cle, libelle, icone) {
+    return UI.el('button', {
+      type: 'button',
+      class: 'tchat-onglet',
+      role: 'tab',
+      dataset: { onglet: cle },
+      onclick: function () {
+        if (etat.onglet === cle) return;
+        etat.onglet = cle;
+        etat.choixOuvert = false;
+        if (cle === 'prive' && !etat.fil && etat.fils.length) etat.fil = etat.fils[0].other_id;
+        peindre();
+        charger(false);
+      }
+    }, [UI.icon(icone, { size: 16 }), UI.el('span', { text: libelle })]);
+  }
+
+  function creerChamp(placeholder) {
+    var champ = UI.el('textarea', {
+      class: 'chat-input',
+      rows: '1',
+      maxlength: String(MAX_CARACTERES),
+      autocomplete: 'off',
+      placeholder: placeholder,
+      'aria-label': placeholder
+    });
+
+    champ.addEventListener('input', function () {
+      champ.style.height = 'auto';
+      champ.style.height = Math.min(160, champ.scrollHeight) + 'px';
+    });
+
+    champ.addEventListener('keydown', function (evenement) {
+      if (evenement.key === 'Enter' && !evenement.shiftKey) {
+        evenement.preventDefault();
+        envoyer(champ === dom.filChamp ? etat.fil : null);
+      }
+    });
+
+    return champ;
+  }
+
+  function boutonEnvoi() {
+    return UI.el('button', { type: 'submit', class: 'btn btn-primary chat-send' }, [
+      UI.icon('send', { size: 17 }),
+      UI.el('span', { class: 'hide-sm', text: 'Envoyer' })
+    ]);
+  }
+
+  /* --------------------------------------------------------------------------
+   * Peinture
+   * ----------------------------------------------------------------------- */
   function peindre() {
     if (!racine || !etat.monte) return;
 
@@ -513,9 +675,19 @@
       bouton.disabled = !etat.filtre;
     });
 
-    dom.compteur.textContent = etat.messages.length + (etat.messages.length > 1 ? ' messages' : ' message');
-    dom.btnStats.classList.toggle('is-active', etat.statsOuvertes);
+    UI.$$('.tchat-onglet', dom.onglets).forEach(function (bouton) {
+      var actif = bouton.dataset.onglet === etat.onglet;
+      bouton.classList.toggle('is-active', actif);
+      bouton.setAttribute('aria-selected', actif ? 'true' : 'false');
+    });
 
+    var signales = (etat.journal || []).length + (etat.signales || []).length;
+    dom.compteur.textContent = etat.onglet === 'classe'
+      ? etat.messages.length + (etat.messages.length > 1 ? ' messages' : ' message')
+      : etat.fils.length + (etat.fils.length > 1 ? ' conversations' : ' conversation');
+    dom.compteur.title = signales + ' détection(s)';
+
+    dom.btnStats.classList.toggle('is-active', etat.statsOuvertes);
     dom.panneauStats.hidden = !etat.statsOuvertes;
     if (etat.statsOuvertes) peindreStats();
 
@@ -526,65 +698,54 @@
       dom.alerte.className = 'alert alert--error is-hidden';
     }
 
-    if (etat.chargement && !etat.messages.length) {
-      UI.clear(dom.log);
-      dom.log.appendChild(UI.el('div', { class: 'tchat-vide' }, [
-        UI.el('span', { class: 'spinner' }),
-        UI.el('span', { text: 'Chargement des messages…' })
-      ]));
-      return;
-    }
+    dom.panneauClasse.hidden = etat.onglet !== 'classe';
+    dom.panneauPrive.hidden = etat.onglet !== 'prive';
 
-    peindreMessages();
+    if (etat.onglet === 'classe') peindreMessages();
+    else peindrePrives();
   }
 
   function peindreMessages() {
     var log = dom.log;
-    var bas = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+    var enBas = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
     UI.clear(log);
+
+    if (etat.chargement && !etat.messages.length) {
+      log.appendChild(chargement());
+      return;
+    }
 
     if (!etat.messages.length) {
       log.appendChild(
-        UI.el('div', { class: 'tchat-vide' }, [
-          UI.icon('chat', { size: 26 }),
-          UI.el('div', { class: 'tchat-vide-titre', text: 'Personne n’a encore parlé' }),
-          UI.el('div', { class: 'tchat-vide-texte', text: 'Écris le premier message : il sera relu et adouci si besoin.' })
-        ])
+        vide('chat', 'Personne n’a encore parlé', 'Écris le premier message : il sera relu et adouci si besoin.')
       );
       return;
     }
 
     var jourCourant = null;
-
     etat.messages.forEach(function (message) {
       var jour = UI.dayLabel ? UI.dayLabel(message.created_at) : '';
       if (jour !== jourCourant) {
         jourCourant = jour;
         log.appendChild(UI.el('div', { class: 'chat-day', text: jour }));
       }
-      log.appendChild(bulle(message));
+      log.appendChild(bulle(message, nomDe(message.author_id), message.author_id === monId(), null));
     });
 
-    if (bas) log.scrollTop = log.scrollHeight;
+    if (enBas) log.scrollTop = log.scrollHeight;
   }
 
-  function bulle(message) {
-    var store = window.ECEM && window.ECEM.Store;
-    var mien = store && store.state.me ? message.author_id === store.state.me.id : false;
-    var prenom = nomDe(message.author_id);
+  function bulle(message, auteur, mien, cible) {
     var heure = new Date(message.created_at).toLocaleTimeString('fr-FR', {
       hour: '2-digit',
       minute: '2-digit'
     });
 
-    var metaEnfants = [
-      UI.el('b', { text: mien ? 'Toi' : prenom }),
-      UI.el('span', { text: heure })
-    ];
+    var meta = [UI.el('b', { text: mien ? 'Toi' : auteur }), UI.el('span', { text: heure })];
 
     if (message.flagged) {
       var etiquettes = (message.categories || []).map(function (c) { return CATEGORIES[c] || c; });
-      metaEnfants.push(
+      meta.push(
         UI.el('span', {
           class: 'tchat-badge',
           title: 'Message repéré par le filtre et adouci',
@@ -594,40 +755,9 @@
     }
 
     var children = [
-      UI.el('div', { class: 'msg-meta' }, metaEnfants),
+      UI.el('div', { class: 'msg-meta' }, meta),
       UI.el('div', { class: 'msg-bubble' }, [UI.el('span', { class: 'tchat-corps', text: message.body })])
     ];
-
-    if (message.body_raw) {
-      var cle = String(message.id);
-      var ouvert = !!etat.originaux[cle];
-
-      var boutonOriginal = UI.el('button', {
-        type: 'button',
-        class: 'tchat-original-btn',
-        'aria-expanded': ouvert ? 'true' : 'false',
-        onclick: function () {
-          etat.originaux[cle] = !etat.originaux[cle];
-          peindreMessages();
-          var boite = dom.log.querySelector('[data-original="' + cle + '"]');
-          if (boite && etat.originaux[cle] && boite.scrollIntoView) boite.scrollIntoView({ block: 'nearest' });
-        }
-      }, [
-        UI.icon('eye', { size: 14 }),
-        UI.el('span', { text: ouvert ? 'Masquer l’original' : 'Voir l’original' })
-      ]);
-
-      children.push(boutonOriginal);
-
-      if (ouvert) {
-        children.push(
-          UI.el('div', {
-            class: 'tchat-original',
-            dataset: { original: cle }
-          }, [message.body_raw])
-        );
-      }
-    }
 
     if (mien || estStaff()) {
       children.push(
@@ -637,18 +767,188 @@
           title: 'Supprimer ce message',
           'aria-label': 'Supprimer ce message',
           onclick: function () {
-            supprimer(message.id);
+            supprimer(message.id, cible ? 'prive' : 'classe');
           }
         }, [UI.icon('trash', { size: 13 })])
       );
     }
 
     return UI.el('div', { class: 'msg' + (mien ? ' msg--mine' : '') + (message.pending ? ' msg--pending' : '') }, [
-      UI.avatar(prenom, { size: 30 }),
+      UI.avatar(auteur, { size: 30 }),
       UI.el('div', { class: 'msg-col' }, children)
     ]);
   }
 
+  function peindrePrives() {
+    peindreFils();
+    peindreFil();
+    peindreChoix();
+  }
+
+  function peindreFils() {
+    UI.clear(dom.filsListe);
+
+    if (!etat.fils.length) {
+      dom.filsListe.appendChild(
+        vide('send', 'Aucune conversation', 'Choisis « Nouvelle conversation » pour écrire à quelqu’un.')
+      );
+      return;
+    }
+
+    etat.fils.forEach(function (fil) {
+      var actif = fil.other_id === etat.fil;
+      var item = UI.el('button', {
+        type: 'button',
+        class: 'tchat-fil-item' + (actif ? ' is-active' : ''),
+        onclick: function () {
+          etat.fil = fil.other_id;
+          etat.choixOuvert = false;
+          peindre();
+          charger(true);
+        }
+      }, [
+        UI.avatar(fil.prenom, { size: 32 }),
+        UI.el('div', { class: 'tchat-fil-item-txt' }, [
+          UI.el('div', { class: 'tchat-fil-item-nom' }, [
+            UI.el('span', { text: fil.prenom }),
+            UI.el('span', { class: 'faint', text: '· ' + UI.roleLabel(fil.role) })
+          ]),
+          UI.el('div', { class: 'tchat-fil-item-apercu', text: fil.last_body || '' })
+        ]),
+        Number(fil.signales) > 0
+          ? UI.el('span', { class: 'tchat-fil-item-badge', title: 'Messages signalés', text: String(fil.signales) })
+          : null
+      ]);
+      dom.filsListe.appendChild(item);
+    });
+  }
+
+  function peindreFil() {
+    var client = etat.fil ? profilDe(etat.fil) : null;
+    UI.clear(dom.filEntete);
+
+    if (!etat.fil) {
+      dom.filBloc.classList.add('is-vide');
+      UI.clear(dom.filLog);
+      dom.filLog.appendChild(vide('send', 'Choisis une conversation', 'Sélectionne quelqu’un à gauche, ou lance une nouvelle conversation.'));
+      dom.filForm.hidden = true;
+      dom.filEntete.appendChild(UI.el('div', { class: 'tchat-fil-titre' }, [
+        UI.el('h3', { text: 'Messages privés' })
+      ]));
+      return;
+    }
+
+    dom.filBloc.classList.remove('is-vide');
+    dom.filForm.hidden = false;
+
+    var nom = client ? client.prenom : nomDe(etat.fil);
+
+    dom.filEntete.appendChild(UI.el('div', { class: 'tchat-fil-titre' }, [
+      UI.avatar(nom, { size: 34 }),
+      UI.el('div', {}, [
+        UI.el('h3', { text: nom }),
+        UI.el('p', {
+          class: 'faint',
+          text: (client ? UI.roleLabel(client.role) : 'Compte') + ' · conversation privée, filtrée comme le reste'
+        })
+      ])
+    ]));
+
+    var log = dom.filLog;
+    var enBas = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+    UI.clear(log);
+
+    if (!etat.messagesPrives.length) {
+      log.appendChild(
+        vide('send', 'Aucun message', 'Dis bonjour : ton message sera relu et adouci si nécessaire.')
+      );
+      return;
+    }
+
+    var jourCourant = null;
+    etat.messagesPrives.forEach(function (message) {
+      var jour = UI.dayLabel ? UI.dayLabel(message.created_at) : '';
+      if (jour !== jourCourant) {
+        jourCourant = jour;
+        log.appendChild(UI.el('div', { class: 'chat-day', text: jour }));
+      }
+      log.appendChild(bulle(message, nomDe(message.sender_id), message.sender_id === monId(), etat.fil));
+    });
+
+    if (enBas) log.scrollTop = log.scrollHeight;
+  }
+
+  function peindreChoix() {
+    var hote = dom.choix;
+    hote.hidden = !etat.choixOuvert;
+    if (!etat.choixOuvert) return;
+
+    UI.clear(hote);
+
+    var recherche = UI.el('input', {
+      type: 'search',
+      placeholder: 'Chercher un prénom…',
+      value: etat.choixRecherche,
+      oninput: function (evenement) {
+        etat.choixRecherche = evenement.target.value;
+        peindreChoix();
+        var champ = dom.choix.querySelector('input');
+        if (champ) { champ.focus(); champ.setSelectionRange(champ.value.length, champ.value.length); }
+      }
+    });
+
+    hote.appendChild(recherche);
+
+    var moi = monId();
+    var filtre = normaliser(etat.choixRecherche);
+    var liste = profils()
+      .filter(function (profil) { return profil.id !== moi; })
+      .filter(function (profil) { return !filtre || normaliser(profil.prenom).indexOf(filtre) !== -1; })
+      .sort(function (a, b) { return a.prenom.localeCompare(b.prenom, 'fr'); });
+
+    if (!liste.length) {
+      hote.appendChild(UI.el('p', { class: 'faint', text: 'Personne à qui écrire pour l’instant.' }));
+      return;
+    }
+
+    hote.appendChild(
+      UI.el('div', { class: 'tchat-choix-liste' }, liste.slice(0, 40).map(function (profil) {
+        return UI.el('button', {
+          type: 'button',
+          class: 'tchat-choix-item',
+          onclick: function () {
+            etat.fil = profil.id;
+            etat.choixOuvert = false;
+            peindre();
+            charger(false);
+          }
+        }, [
+          UI.avatar(profil.prenom, { size: 26 }),
+          UI.el('span', { text: profil.prenom }),
+          UI.el('span', { class: 'faint', text: UI.roleLabel(profil.role) })
+        ]);
+      }))
+    );
+  }
+
+  function chargement() {
+    return UI.el('div', { class: 'tchat-vide' }, [
+      UI.el('span', { class: 'spinner' }),
+      UI.el('span', { text: 'Chargement des messages…' })
+    ]);
+  }
+
+  function vide(icone, titre, texte) {
+    return UI.el('div', { class: 'tchat-vide' }, [
+      UI.icon(icone, { size: 26 }),
+      UI.el('div', { class: 'tchat-vide-titre', text: titre }),
+      UI.el('div', { class: 'tchat-vide-texte', text: texte })
+    ]);
+  }
+
+  /* --------------------------------------------------------------------------
+   * Panneau des détections
+   * ----------------------------------------------------------------------- */
   function peindreStats() {
     var hote = dom.panneauStats;
     UI.clear(hote);
@@ -659,20 +959,21 @@
     var parNiveau = stats.par_niveau || {};
     var parCategorie = stats.par_categorie || {};
 
-    var chiffres = UI.el('div', { class: 'tchat-chiffres' }, [
+    hote.appendChild(UI.el('div', { class: 'tchat-stats-head' }, [
+      UI.el('h3', { text: 'Journal des détections' }),
+      UI.el('p', {
+        class: 'sub',
+        text: estStaff()
+          ? 'Ce que le filtre a repéré, dans la classe comme en privé, et comment chaque message a été réécrit.'
+          : 'Ce que le filtre a repéré dans tes messages.'
+      })
+    ]));
+
+    hote.appendChild(UI.el('div', { class: 'tchat-chiffres' }, [
       chiffre(total, 'détections au total'),
       chiffre(jour, 'sur les dernières 24 h'),
       chiffre(Number(parNiveau[etat.niveau] || 0), 'adoucis en « ' + NIVEAUX[etat.niveau].label + ' »')
-    ]);
-
-    hote.appendChild(UI.el('div', { class: 'tchat-stats-head' }, [
-      UI.el('h3', { text: 'Journal des détections' }),
-      UI.el('p', { class: 'sub', text: estStaff()
-        ? 'Ce que le filtre a repéré, et comment chaque message a été réécrit.'
-        : 'Ce que le filtre a repéré dans tes messages.' })
     ]));
-
-    hote.appendChild(chiffres);
 
     var cats = Object.keys(parCategorie).sort(function (a, b) {
       return parCategorie[b] - parCategorie[a];
@@ -696,8 +997,39 @@
       );
     }
 
+    /* Messages privés signalés : visible par les modérateurs uniquement. */
+    if (estStaff()) {
+      hote.appendChild(
+        UI.el('div', { class: 'tchat-signales' }, [
+          UI.el('h4', { text: 'Messages privés signalés' }),
+          etat.signales.length
+            ? UI.el('ul', { class: 'tchat-signales-liste' }, etat.signales.map(function (entree) {
+                return UI.el('li', {}, [
+                  UI.el('span', { class: 'tchat-signales-qui', text: entree.sender + ' → ' + entree.recipient }),
+                  UI.el('span', {
+                    class: 'tchat-signales-extrait',
+                    text: '« ' + (entree.excerpt || '') + ' »'
+                  }),
+                  UI.el('span', {
+                    class: 'tchat-signales-cat',
+                    text: (entree.categories || []).map(function (c) { return CATEGORIES[c] || c; }).join(', ') || 'à surveiller'
+                  }),
+                  UI.el('button', {
+                    type: 'button',
+                    class: 'icon-btn tchat-signales-suppr',
+                    title: 'Supprimer ce message privé',
+                    'aria-label': 'Supprimer ce message privé',
+                    onclick: function () { supprimerPrive(entree.id); }
+                  }, [UI.icon('trash', { size: 13 })])
+                ]);
+              }))
+            : UI.el('p', { class: 'faint', text: 'Aucun message privé signalé. Tout va bien.' })
+        ])
+      );
+    }
+
     if (!etat.journal.length) {
-      hote.appendChild(UI.el('p', { class: 'faint', text: 'Aucune détection pour le moment. Tout le monde est très sage.' }));
+      hote.appendChild(UI.el('p', { class: 'faint', text: 'Aucune détection dans les messages de classe pour le moment.' }));
       return;
     }
 
@@ -732,32 +1064,36 @@
   /* --------------------------------------------------------------------------
    * Envoi
    * ----------------------------------------------------------------------- */
-  function envoyer() {
+  function envoyer(cible) {
     if (etat.envoi) return;
 
-    var texte = String(dom.champ.value || '').trim();
+    var champ = cible ? dom.filChamp : dom.champ;
+    var texte = String(champ.value || '').trim();
+
     if (!texte) {
-      dom.champ.focus();
+      champ.focus();
       return;
     }
 
     etat.envoi = true;
-    dom.btnEnvoyer.disabled = true;
-    dom.champ.disabled = true;
+    reglerBoutons(true);
     dom.statut.textContent = etat.filtre ? 'Le filtre de gentillesse relit ton message…' : 'Envoi…';
 
     var analyse = etat.filtre
       ? analyserAvecIA(texte)
-      : Promise.resolve({ flagged: false, categories: [], severity: 0, doux: texte, genant: texte, ultra: texte, source: 'filtre-off' });
+      : Promise.resolve({
+          flagged: false, categories: [], severity: 0,
+          doux: texte, genant: texte, ultra: texte, source: 'filtre-off'
+        });
 
     analyse
       .then(function (resultat) {
         var version = etat.filtre ? (resultat[etat.niveau] || resultat.doux || texte) : texte;
-        return envoyerAuServeur(version, texte, resultat);
+        return envoyerAuServeur(version, texte, resultat, cible);
       })
       .then(function () {
-        dom.champ.value = '';
-        dom.champ.style.height = 'auto';
+        champ.value = '';
+        champ.style.height = 'auto';
         dom.statut.textContent = '';
       })
       .catch(function (erreur) {
@@ -766,17 +1102,23 @@
       })
       .then(function () {
         etat.envoi = false;
-        dom.btnEnvoyer.disabled = false;
-        dom.champ.disabled = false;
-        dom.champ.focus();
+        reglerBoutons(false);
+        champ.focus();
       });
   }
 
-  function envoyerAuServeur(version, original, analyse) {
-    var client = sb();
-    if (!client || !client.rpc) return Promise.reject(new Error('hors-ligne'));
+  function reglerBoutons(occupe) {
+    [dom.btnEnvoyer, dom.filEnvoyer].forEach(function (bouton) {
+      if (bouton) bouton.disabled = occupe;
+    });
+    [dom.champ, dom.filChamp].forEach(function (champ) {
+      if (champ) champ.disabled = occupe;
+    });
+  }
 
+  function envoyerAuServeur(version, original, analyse, cible) {
     var adouci = !!(etat.filtre && analyse && analyse.flagged);
+
     var enveloppe = {
       p_body: version,
       p_body_raw: adouci ? original : null,
@@ -787,43 +1129,61 @@
       p_source: analyse && analyse.source ? analyse.source : null
     };
 
-    return client.rpc('class_chat_send', enveloppe).then(function (res) {
+    if (cible) enveloppe.p_to = cible;
+
+    var appel = cible ? rpc('private_send', enveloppe) : rpc('class_chat_send', enveloppe);
+
+    return appel.then(function (res) {
       if (res.error) throw res.error;
       var id = res.data && res.data.id;
 
-      if (adouci && id) {
-        client
-          .rpc('moderation_log', {
-            p_message_id: id,
-            p_categories: analyse.categories || [],
-            p_severity: analyse.severity || 0,
-            p_level: etat.niveau,
-            p_source: analyse.source || null,
-            p_excerpt: original.slice(0, 180)
-          })
-          .catch(function () { /* journal secondaire : jamais bloquant */ });
+      if (adouci && id && !cible) {
+        rpc('moderation_log', {
+          p_message_id: id,
+          p_categories: analyse.categories || [],
+          p_severity: analyse.severity || 0,
+          p_level: etat.niveau,
+          p_source: analyse.source || null,
+          p_excerpt: original.slice(0, 180)
+        });
       }
 
       if (adouci) {
-        UI.toast('Message adouci avant publication (niveau ' + NIVEAUX[etat.niveau].label + ').', 'info');
+        UI.toast(
+          'Message adouci avant publication (niveau ' + NIVEAUX[etat.niveau].label + ').',
+          'info'
+        );
       }
 
       return charger(true);
     });
   }
 
-  function supprimer(id) {
-    var client = sb();
-    if (!client || !client.rpc) return;
+  function supprimer(id, espace) {
     if (!window.confirm('Supprimer ce message ?')) return;
 
-    client
-      .rpc('class_chat_delete', { p_id: id })
+    var appel = espace === 'prive'
+      ? rpc('private_delete', { p_id: id })
+      : rpc('class_chat_delete', { p_id: id });
+
+    appel
       .then(function (res) {
         if (res.error) throw res.error;
         return charger(true);
       })
       .then(function () { UI.toast('Message supprimé.', 'success'); })
+      .catch(function (erreur) { UI.err(messageErreur(erreur)); });
+  }
+
+  function supprimerPrive(id) {
+    if (!window.confirm('Supprimer ce message privé signalé ?')) return;
+
+    rpc('private_delete', { p_id: id })
+      .then(function (res) {
+        if (res.error) throw res.error;
+        return charger(true);
+      })
+      .then(function () { UI.toast('Message privé supprimé.', 'success'); })
       .catch(function (erreur) { UI.err(messageErreur(erreur)); });
   }
 
