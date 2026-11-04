@@ -57,11 +57,11 @@
       var objet = brut ? JSON.parse(brut) : null;
       return {
         filtre: objet && objet.filtre === false ? false : true,
-        niveau: objet && NIVEAUX[objet.niveau] ? objet.niveau : 'genant',
+        niveau: objet && NIVEAUX[objet.niveau] ? objet.niveau : 'doux',
         stats: !!(objet && objet.stats)
       };
     } catch (e) {
-      return { filtre: true, niveau: 'genant', stats: false };
+      return { filtre: true, niveau: 'doux', stats: false };
     }
   }
 
