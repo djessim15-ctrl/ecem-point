@@ -3159,3 +3159,14 @@ textarea { resize: vertical; min-height: 96px; line-height: 1.5; }
 .pill--or     { background: rgba(233, 162, 24, .16);  color: #b57c0d; }
 .pill--rose   { background: rgba(232, 85, 143, .15);  color: #c93a76; }
 .pill--ok     { background: rgba(16, 165, 106, .13);  color: #0f935f; }
+
+/* Barre d'outils du rapport de climat (onglet « Climat ») */
+.climat-barre-outils {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.climat-lien { margin-top: 8px; }

@@ -77,7 +77,7 @@ python3 -m http.server 8080
 | **Modération centralisée** | Admin → Modération | messages filtrés, signalements 🚩 et messages privés filtrés au même endroit : masquer, modifier, supprimer |
 | **Qui essaie de se connecter** | Admin → Connexions | journal des tentatives (prénom, réussite, appareil, date) + purge |
 | **Anti-bruteforce** | Connexion | 5 échecs en 15 minutes sur un prénom → blocage d’un quart d’heure, message avec le temps restant |
-| **Rapport de climat** | Admin → Climat | score, familles, personnes visées, paires en conflit → export CSV et impression PDF |
+| **Rapport de climat** | onglet **Climat de la classe** (encadrement) + Admin → Climat | score, familles, personnes visées, paires en conflit → export CSV et impression PDF |
 | **QR code de partage** | Connexion, Profil | QR fabriqué sur l’appareil par `assets/vendor/qrcode.js`, aucun service externe, marche hors-ligne |
 
 ### Nouveautés 2.9
@@ -89,8 +89,10 @@ python3 -m http.server 8080
   connexion. `admin_login_attempts()` et `admin_clear_login_attempts()` donnent
   à l’admin la liste de qui essaie d’entrer, avec l’appareil utilisé.
 - **Rapport de climat** : `climat_report()` renvoie score, familles, cibles
-  récurrentes et paires en conflit ; l’admin l’exporte en CSV ou l’imprime en
-  PDF depuis le navigateur.
+  récurrentes et paires en conflit. Il a son **propre écran** (« Climat de la
+  classe », visible par l’encadrement dans le menu, avec un raccourci depuis le
+  panneau Détections du tchat) : export CSV et impression PDF depuis le
+  navigateur. L’onglet Climat de l’administration affiche le même rapport.
 - **Modération centralisée** : un onglet unique qui rassemble le tchat de
   classe filtré, les signalements 🚩 et les messages privés filtrés.
 - **QR de partage** : bouton « QR code » sur la page de connexion et dans le

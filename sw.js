@@ -28,6 +28,7 @@ const SHELL = [
   'assets/js/data.js',
   'assets/js/class-chat.js',
   'assets/js/cards.js',
+  'assets/js/climat.js',
   'assets/js/qr.js',
   'assets/js/app.js',
   'assets/js/auth.js',

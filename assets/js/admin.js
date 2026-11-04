@@ -504,10 +504,7 @@
         return res.data || {};
       });
     } else {
-      taches = rpc('climat_report').then(function (res) {
-        if (res.error) throw res.error;
-        return res.data || {};
-      });
+      taches = Promise.resolve({});
     }
 
     return taches.then(function (donnees) {
@@ -872,265 +869,18 @@
   /* Rapport de climat                                                      */
   /* ---------------------------------------------------------------------- */
   function peindreClimat(hote) {
-    var boite = extra('climat');
-
-    hote.appendChild(UI.el('div', { class: 'admin-barre' }, [
-      UI.el('p', { class: 'sub', text:
-        'Un état des lieux de la classe sur 7 et 30 jours : score, familles de violence, ' +
-        'personnes visées, paires en conflit. Exportable en CSV ou imprimable en PDF.' }),
-      UI.el('div', { class: 'admin-actions' }, [
-        UI.el('button', {
-          type: 'button', class: 'btn btn-ghost btn-sm', text: 'Rafraîchir',
-          onclick: function () { rechargerExtra('climat'); }
-        }),
-        UI.el('button', {
-          type: 'button', class: 'btn btn-ghost btn-sm',
-          onclick: function () { exporterClimat(); }
-        }, [UI.icon('download', { size: 15 }), document.createTextNode(' CSV')]),
-        UI.el('button', {
-          type: 'button', class: 'btn btn-primary btn-sm',
-          onclick: function () { imprimerClimat(); }
-        }, [UI.icon('upload', { size: 15 }), document.createTextNode(' Imprimer / PDF')])
-      ])
-    ]));
-
-    if (boite.erreur) hote.appendChild(UI.el('div', { class: 'alert alert--error', text: boite.erreur }));
-
-    if (boite.chargement && !boite.donnees) {
-      hote.appendChild(UI.el('div', { class: 'empty' }, [
-        UI.el('span', { class: 'spinner' }),
-        UI.el('div', { class: 'empty-text', text: 'Calcul du climat…' })
-      ]));
+    /* Le rapport vit dans son propre module : il est aussi accessible depuis
+       l'onglet « Climat » de la navigation, pour l'encadrement. */
+    if (window.ECEM && window.ECEM.Climat) {
+      window.ECEM.Climat.mount(hote);
       return;
     }
 
-    var data = boite.donnees || {};
-    var score = data.score == null ? 0 : data.score;
-
-    hote.appendChild(UI.el('div', { class: 'climat-entete' }, [
-      UI.el('div', { class: 'climat-score' }, [
-        window.ECEM.Charts
-          ? window.ECEM.Charts.ring(score, 100, { caption: '/ 100', size: 132 })
-          : UI.el('b', { text: String(score) })
-      ]),
-      UI.el('div', { class: 'climat-chiffres' }, [
-        chiffre('Messages (7 j)', data.messages_7j),
-        chiffre('Drapeaux (7 j)', data.drapeaux_7j),
-        chiffre('Signalements (30 j)', data.signalements_30j),
-        chiffre('Comptes', data.comptes),
-        chiffre('Suspendus', data.suspendus)
-      ])
+    hote.appendChild(UI.el('div', { class: 'empty' }, [
+      UI.el('span', { class: 'empty-ico' }, [UI.icon('chart', { size: 26 })]),
+      UI.el('div', { class: 'empty-title', text: 'Rapport indisponible' }),
+      UI.el('div', { class: 'empty-text', text: 'Le module du rapport de climat n’a pas pu se charger.' })
     ]));
-
-    var familles = data.familles || [];
-    var secFamilles = UI.el('div', { class: 'panel' });
-    secFamilles.appendChild(UI.el('div', { class: 'panel-head' }, [
-      UI.el('div', {}, [
-        UI.el('div', { class: 'panel-title' }, [UI.el('span', {}, [UI.icon('filter', { size: 16 })]), document.createTextNode(' Familles de violence (30 jours)')]),
-        UI.el('div', { class: 'panel-sub', text: familles.length ? 'Du plus fréquent au moins fréquent' : 'Aucun message filtré' })
-      ])
-    ]));
-    var corpsFamilles = UI.el('div', { class: 'panel-body' });
-    if (!familles.length) {
-      corpsFamilles.appendChild(UI.el('div', { class: 'empty-text', text: 'Aucune famille détectée sur la période. 👍' }));
-    } else {
-      var maxi = familles.reduce(function (max, ligne) { return Math.max(max, ligne.nombre || 0); }, 1);
-      familles.forEach(function (ligne) {
-        corpsFamilles.appendChild(UI.el('div', { class: 'climat-barre' }, [
-          UI.el('span', { class: 'climat-barre-nom', text: familleLabel(ligne.famille) }),
-          UI.el('span', { class: 'climat-barre-piste' }, [
-            UI.el('span', { style: { width: Math.round(((ligne.nombre || 0) / maxi) * 100) + '%' } })
-          ]),
-          UI.el('b', { text: String(ligne.nombre || 0) })
-        ]));
-      });
-    }
-    secFamilles.appendChild(corpsFamilles);
-    hote.appendChild(secFamilles);
-
-    var cibles = data.cibles || [];
-    var paires = data.paires || [];
-
-    var secCibles = UI.el('div', { class: 'panel' });
-    secCibles.appendChild(UI.el('div', { class: 'panel-head' }, [
-      UI.el('div', {}, [
-        UI.el('div', { class: 'panel-title' }, [UI.el('span', {}, [UI.icon('target', { size: 16 })]), document.createTextNode(' Personnes visées')]),
-        UI.el('div', { class: 'panel-sub', text: 'Au moins deux messages filtrés contre la même personne' })
-      ])
-    ]));
-    var corpsCibles = UI.el('div', { class: 'panel-body panel-body--flush' });
-    if (!cibles.length) {
-      corpsCibles.appendChild(UI.el('div', { class: 'empty-text', style: { padding: '14px' }, text: 'Personne n’est visé de façon répétée.' }));
-    } else {
-      cibles.forEach(function (ligne) {
-        corpsCibles.appendChild(UI.el('div', { class: 'admin-ligne' }, [
-          UI.el('div', { class: 'admin-ligne-tete' }, [
-            UI.el('b', { text: ligne.cible || '—' }),
-            UI.el('span', { class: 'pill pill--danger', text: (ligne.messages || 0) + ' message' + ((ligne.messages || 0) > 1 ? 's' : '') }),
-            UI.el('span', { class: 'pill pill--muted', text: (ligne.auteurs || 0) + ' auteur' + ((ligne.auteurs || 0) > 1 ? 's' : '') })
-          ])
-        ]));
-      });
-    }
-    secCibles.appendChild(corpsCibles);
-    hote.appendChild(secCibles);
-
-    var secPaires = UI.el('div', { class: 'panel' });
-    secPaires.appendChild(UI.el('div', { class: 'panel-head' }, [
-      UI.el('div', {}, [
-        UI.el('div', { class: 'panel-title' }, [UI.el('span', {}, [UI.icon('users', { size: 16 })]), document.createTextNode(' Paires en conflit')]),
-        UI.el('div', { class: 'panel-sub', text: 'Trois messages privés filtrés ou plus entre les deux mêmes élèves' })
-      ])
-    ]));
-    var corpsPaires = UI.el('div', { class: 'panel-body panel-body--flush' });
-    if (!paires.length) {
-      corpsPaires.appendChild(UI.el('div', { class: 'empty-text', style: { padding: '14px' }, text: 'Aucune paire récurrente.' }));
-    } else {
-      paires.forEach(function (ligne) {
-        corpsPaires.appendChild(UI.el('div', { class: 'admin-ligne' }, [
-          UI.el('div', { class: 'admin-ligne-tete' }, [
-            UI.el('b', { text: (ligne.a || '?') + ' ↔ ' + (ligne.b || '?') }),
-            UI.el('span', { class: 'pill pill--danger', text: (ligne.n || 0) + ' messages' })
-          ])
-        ]));
-      });
-    }
-    secPaires.appendChild(corpsPaires);
-    hote.appendChild(secPaires);
-
-    hote.appendChild(UI.el('p', {
-      class: 'faint',
-      text: 'Rapport généré le ' + (data.genere_le
-        ? new Date(data.genere_le).toLocaleString('fr-FR')
-        : new Date().toLocaleString('fr-FR')) + '.'
-    }));
-  }
-
-  function lignesClimat() {
-    var boite = extra('climat');
-    var data = (boite && boite.donnees) || {};
-    var lignes = [
-      ['Rapport de climat — ECEM Point'],
-      ['Généré le', data.genere_le ? new Date(data.genere_le).toLocaleString('fr-FR') : new Date().toLocaleString('fr-FR')],
-      [],
-      ['Score', data.score == null ? '' : data.score],
-      ['Messages (7 jours)', data.messages_7j || 0],
-      ['Messages filtrés (7 jours)', data.drapeaux_7j || 0],
-      ['Signalements (30 jours)', data.signalements_30j || 0],
-      ['Comptes', data.comptes || 0],
-      ['Comptes suspendus', data.suspendus || 0],
-      [],
-      ['Famille', 'Messages'],
-      (data.familles || []).map(function (l) { return [familleLabel(l.famille), l.nombre || 0]; })
-    ];
-
-    /* Aplatir les sous-tableaux en lignes simples. */
-    var plates = [];
-    lignes.forEach(function (ligne) {
-      if (!ligne.length) { plates.push(['']); return; }
-      if (Array.isArray(ligne[0])) {
-        ligne.forEach(function (sous) { plates.push(sous); });
-      } else {
-        plates.push(ligne);
-      }
-    });
-
-    if ((data.cibles || []).length) {
-      plates.push([]);
-      plates.push(['Personne visée', 'Messages', 'Auteurs']);
-      data.cibles.forEach(function (l) { plates.push([l.cible || '', l.messages || 0, l.auteurs || 0]); });
-    }
-
-    if ((data.paires || []).length) {
-      plates.push([]);
-      plates.push(['Élève A', 'Élève B', 'Messages privés filtrés']);
-      data.paires.forEach(function (l) { plates.push([l.a || '', l.b || '', l.n || 0]); });
-    }
-
-    return plates;
-  }
-
-  function exporterClimat() {
-    if (!extra('climat').donnees) {
-      if (UI.err) UI.err('Le rapport n’est pas encore chargé.');
-      return;
-    }
-    var nom = 'ecem-climat-' + new Date().toISOString().slice(0, 10) + '.csv';
-    if (UI.download && UI.csv) {
-      UI.download(nom, '\uFEFF' + UI.csv(lignesClimat()), 'text/csv;charset=utf-8');
-      if (UI.toast) UI.toast('Rapport exporté.', 'ok');
-    }
-  }
-
-  function imprimerClimat() {
-    var data = extra('climat').donnees;
-    if (!data) {
-      if (UI.err) UI.err('Le rapport n’est pas encore chargé.');
-      return;
-    }
-
-    function esc(texte) {
-      return String(texte == null ? '' : texte)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
-
-    var html = '<!doctype html><html lang="fr"><head><meta charset="utf-8">' +
-      '<title>Rapport de climat — ECEM Point</title><style>' +
-      'body{font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;color:#1b1730;margin:32px}' +
-      'h1{font-size:1.4rem;margin:0 0 4px}h2{font-size:1.05rem;margin:24px 0 8px}' +
-      '.sub{color:#5b5470;margin:0 0 18px}' +
-      'table{border-collapse:collapse;width:100%;margin-bottom:8px}' +
-      'th,td{border-bottom:1px solid #e6e1f5;padding:6px 8px;text-align:left}' +
-      'th{background:#f3f0ff}.score{font-size:2.2rem;font-weight:800}' +
-      '</style></head><body>';
-
-    html += '<h1>Rapport de climat — ECEM Point</h1>';
-    html += '<p class="sub">Généré le ' + esc(new Date(data.genere_le || Date.now()).toLocaleString('fr-FR')) + '</p>';
-    html += '<div class="score">' + esc(data.score == null ? '—' : data.score) + ' / 100</div>';
-
-    html += '<h2>Chiffres</h2><table><tbody>' +
-      '<tr><th>Messages (7 jours)</th><td>' + esc(data.messages_7j || 0) + '</td></tr>' +
-      '<tr><th>Messages filtrés (7 jours)</th><td>' + esc(data.drapeaux_7j || 0) + '</td></tr>' +
-      '<tr><th>Signalements (30 jours)</th><td>' + esc(data.signalements_30j || 0) + '</td></tr>' +
-      '<tr><th>Comptes</th><td>' + esc(data.comptes || 0) + '</td></tr>' +
-      '<tr><th>Comptes suspendus</th><td>' + esc(data.suspendus || 0) + '</td></tr>' +
-      '</tbody></table>';
-
-    html += '<h2>Familles de violence (30 jours)</h2><table><thead><tr><th>Famille</th><th>Messages</th></tr></thead><tbody>';
-    if (!(data.familles || []).length) html += '<tr><td colspan="2">Aucune.</td></tr>';
-    (data.familles || []).forEach(function (l) {
-      html += '<tr><td>' + esc(familleLabel(l.famille)) + '</td><td>' + esc(l.nombre) + '</td></tr>';
-    });
-    html += '</tbody></table>';
-
-    html += '<h2>Personnes visées</h2><table><thead><tr><th>Personne</th><th>Messages</th><th>Auteurs</th></tr></thead><tbody>';
-    if (!(data.cibles || []).length) html += '<tr><td colspan="3">Aucune.</td></tr>';
-    (data.cibles || []).forEach(function (l) {
-      html += '<tr><td>' + esc(l.cible) + '</td><td>' + esc(l.messages) + '</td><td>' + esc(l.auteurs) + '</td></tr>';
-    });
-    html += '</tbody></table>';
-
-    html += '<h2>Paires en conflit</h2><table><thead><tr><th>Élève A</th><th>Élève B</th><th>Messages</th></tr></thead><tbody>';
-    if (!(data.paires || []).length) html += '<tr><td colspan="3">Aucune.</td></tr>';
-    (data.paires || []).forEach(function (l) {
-      html += '<tr><td>' + esc(l.a) + '</td><td>' + esc(l.b) + '</td><td>' + esc(l.n) + '</td></tr>';
-    });
-    html += '</tbody></table>';
-
-    html += '<p class="sub" style="margin-top:24px">Document interne à l’encadrement de la classe.</p>';
-    html += '</body></html>';
-
-    var fenetre = window.open('', '_blank');
-    if (!fenetre) {
-      if (UI.err) UI.err('Autorise les fenêtres surgissantes pour imprimer le rapport.');
-      return;
-    }
-    fenetre.document.open();
-    fenetre.document.write(html);
-    fenetre.document.close();
-    window.setTimeout(function () {
-      try { fenetre.focus(); fenetre.print(); } catch (e) {}
-    }, 350);
   }
 
   function peindre() {
@@ -1196,7 +946,7 @@
       onclick: function () {
         etat.onglet = cle;
         peindre();
-        if (cle === 'moderation' || cle === 'connexions' || cle === 'climat') {
+        if (cle === 'moderation' || cle === 'connexions') {
           chargerExtra(cle);
         }
       }
