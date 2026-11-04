@@ -262,10 +262,14 @@
   };
 
   Store.refreshAll = function () {
-    return Promise.all([loadProfiles(), loadEvents(), Store.isStaff() ? loadMessages() : Promise.resolve([])])
-      .then(function () {
-        emit('refresh');
-      });
+    return Promise.all([
+      loadSettings(),
+      loadProfiles(),
+      loadEvents(),
+      Store.isStaff() ? loadMessages() : Promise.resolve([])
+    ]).then(function () {
+      emit('refresh');
+    });
   };
 
   /* -------------------------------------------------------------------------
