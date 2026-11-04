@@ -2404,28 +2404,57 @@ textarea { resize: vertical; min-height: 96px; line-height: 1.5; }
 .tchat-head-txt { display: grid; gap: 4px; min-width: 240px; }
 .tchat-outils { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
-/* Interrupteur du filtre ------------------------------------------------ */
-.tchat-switch {
-  display: inline-flex; align-items: center; gap: 10px;
-  padding: 7px 13px 7px 8px;
-  border: 1px solid var(--border); border-radius: var(--radius-full);
-  background: var(--surface); color: var(--text-soft);
-  font-size: .84rem; font-weight: 650; cursor: pointer;
-  transition: border-color .2s var(--ease), background .2s var(--ease), color .2s var(--ease);
+/* Filtre obligatoire : un badge, aucun interrupteur --------------------- */
+.tchat-verrou {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 7px 13px;
+  border: 1px solid var(--accent); border-radius: var(--radius-full);
+  background: var(--accent-soft); color: var(--accent);
+  font-size: .84rem; font-weight: 750;
+  cursor: default; user-select: none;
 }
-.tchat-switch:hover { border-color: var(--border-strong); color: var(--text); }
-.tchat-switch-rail {
-  position: relative; width: 38px; height: 21px; border-radius: 99px;
-  background: var(--accent); flex: none; transition: background .2s var(--ease);
+.tchat-verrou-ico { font-size: .92rem; line-height: 1; }
+
+/* Annonces de l'encadrement -------------------------------------------- */
+.tchat-annonces {
+  display: grid; gap: 8px;
+  padding: 12px 14px; border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--gold-soft), rgba(233, 162, 24, .03));
+  border: 1px solid rgba(233, 162, 24, .38);
 }
-.tchat-switch-knob {
-  position: absolute; top: 3px; left: 20px; width: 15px; height: 15px;
-  border-radius: 50%; background: #fff; transition: left .2s var(--ease);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
+.tchat-annonces-titre {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: .72rem; font-weight: 850; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--gold, #b4780a);
 }
-.tchat-switch.is-off .tchat-switch-rail { background: var(--border-strong); }
-.tchat-switch.is-off .tchat-switch-knob { left: 3px; }
-.tchat-switch.is-off { color: var(--text-faint); }
+.tchat-annonce {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: .85rem; line-height: 1.45;
+}
+.tchat-annonce-txt { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.tchat-annonce-x {
+  flex: none; border: 0; background: none; cursor: pointer;
+  color: var(--text-faint); border-radius: 6px; padding: 2px 4px; line-height: 1;
+}
+.tchat-annonce-x:hover { color: var(--red); }
+
+.tchat-annonce-bouton.is-active {
+  border-color: var(--gold); color: var(--gold, #b4780a);
+  background: var(--gold-soft);
+}
+.chat-form.is-annonce { border-color: var(--gold); }
+
+.tchat-badge--annonce { background: rgba(233, 162, 24, .22); color: var(--gold, #b4780a); }
+.tchat-badge--edit { background: rgba(90, 120, 220, .16); color: #5a78dc; }
+.tchat-badge--masque { background: var(--red-soft); color: var(--red); }
+
+.msg--annonce .msg-bubble {
+  border-left: 3px solid var(--gold);
+  background: linear-gradient(135deg, var(--gold-soft), transparent 70%);
+}
+.msg--masque .msg-bubble {
+  opacity: .55; border: 1px dashed var(--border-strong); background: transparent;
+}
 
 /* Sélecteur de niveau --------------------------------------------------- */
 .tchat-seg {
@@ -2540,7 +2569,7 @@ textarea { resize: vertical; min-height: 96px; line-height: 1.5; }
 @media (max-width: 720px) {
   .tchat-head { gap: 12px; }
   .tchat-outils { width: 100%; justify-content: space-between; }
-  .tchat-switch-text { font-size: .8rem; }
+  .tchat-verrou { font-size: .8rem; }
   .tchat-cat { grid-template-columns: 108px 1fr 26px; }
   .tchat-journal li { grid-template-columns: 74px 1fr auto; }
   .tchat-journal-src { display: none; }
@@ -2884,4 +2913,19 @@ textarea { resize: vertical; min-height: 96px; line-height: 1.5; }
   .admin-row { flex-wrap: wrap; }
   .admin-actions { width: 100%; justify-content: flex-start; }
   .admin-sous { font-size: .74rem; }
+}
+
+/* --------------------------------------------------------------------------
+ * Récapitulatif des droits (profil)
+ * ----------------------------------------------------------------------- */
+.acces-liste { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
+.acces-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  font-size: .87rem; line-height: 1.45; color: var(--text-soft);
+}
+.acces-ico {
+  flex: none; width: 20px; height: 20px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--green-soft, rgba(46, 164, 106, .14));
+  color: var(--green, #2ea46a); font-size: .7rem; font-weight: 900;
 }

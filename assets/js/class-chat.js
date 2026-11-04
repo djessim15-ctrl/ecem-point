@@ -8,12 +8,18 @@
  * Dans les deux cas, chaque message passe par une IA (GPT-OSS 120B via Groq,
  * appelée depuis l'Edge Function `moderate`) qui repère insultes, gros mots,
  * spam, harcèlement, agressivité, flood ou majuscules agressives, puis le
- * réécrit en trois versions de plus en plus gentilles : Doux, Gênant, Ultra.
- * Le filtre s'applique à TOUT LE MONDE, délégués et suppléants compris.
+ * réécrit en disant le CONTRAIRE du message.
  *
- * Délégués et suppléants sont modérateurs : ils voient dans « Détections » les
- * messages privés signalés et peuvent les supprimer. Ils ne lisent pas les
- * conversations privées ordinaires.
+ * Le filtre est OBLIGATOIRE et ne peut pas être désactivé : ni par un élève,
+ * ni par un délégué, ni par l'admin. Le serveur refuse d'ailleurs tout message
+ * qui contient encore une insulte (fonction `contient_insulte`).
+ *
+ * Droits :
+ *   • Élève     : lire et écrire dans les deux tchats, réagir, répondre.
+ *   • Délégué / suppléant : mêmes droits + annonces + épingler + modération
+ *     des messages privés signalés.
+ *   • Admin     : masquer (bloquer), modifier et supprimer n'importe quel
+ *     message du tchat de classe, et voir les messages masqués.
  *
  * Rien ne dépend du réseau pour rester utilisable : si l'IA ne répond pas
  * (hors-ligne, quota, panne), un filtre local prend le relais.
@@ -56,12 +62,11 @@
       var brut = window.localStorage.getItem(LS_KEY);
       var objet = brut ? JSON.parse(brut) : null;
       return {
-        filtre: objet && objet.filtre === false ? false : true,
         niveau: objet && NIVEAUX[objet.niveau] ? objet.niveau : 'doux',
         stats: !!(objet && objet.stats)
       };
     } catch (e) {
-      return { filtre: true, niveau: 'doux', stats: false };
+      return { niveau: 'doux', stats: false };
     }
   }
 
@@ -69,7 +74,7 @@
     try {
       window.localStorage.setItem(
         LS_KEY,
-        JSON.stringify({ filtre: etat.filtre, niveau: etat.niveau, stats: etat.statsOuvertes })
+        JSON.stringify({ niveau: etat.niveau, stats: etat.statsOuvertes })
       );
     } catch (e) {
       /* mode privé : on continue sans mémoriser */
@@ -85,8 +90,8 @@
     monte: false,
     chargement: false,
     envoi: false,
-    filtre: prefs.filtre,
     niveau: prefs.niveau,
+    annonce: false,
     statsOuvertes: prefs.stats,
     onglet: 'classe',
     messages: [],
@@ -96,6 +101,7 @@
     fils: [],
     fil: null,
     messagesPrives: [],
+    annonces: [],
     reactions: {},
     climat: null,
     reponse: null,
@@ -154,6 +160,16 @@
   function estStaff() {
     var store = window.ECEM && window.ECEM.Store;
     return !!(store && store.isStaff && store.isStaff());
+  }
+
+  function estAdmin() {
+    var store = window.ECEM && window.ECEM.Store;
+    return !!(store && store.isAdmin && store.isAdmin());
+  }
+
+  /* Annonces : délégués, suppléants et admins. */
+  function peutAnnoncer() {
+    return estStaff() || estAdmin();
   }
 
   function profils() {
@@ -445,7 +461,11 @@
     if (texte.indexOf('MESSAGE_VIDE') !== -1) return 'Le message est vide.';
     if (texte.indexOf('NIVEAU_INVALIDE') !== -1) return 'Niveau de gentillesse inconnu.';
     if (texte.indexOf('DESTINATAIRE') !== -1) return 'Ce destinataire n’existe plus.';
-    if (texte.indexOf('INTERDIT') !== -1) return 'Action réservée aux délégués et suppléants.';
+    if (texte.indexOf('INTERDIT') !== -1) return 'Action réservée aux délégués, suppléants et administrateurs.';
+    if (texte.indexOf('INSULTE_INTERDITE') !== -1) {
+      return 'Ton message contient encore une insulte : le filtre l’a refusé. Utilise ✨ Inverser puis renvoie.';
+    }
+    if (texte.indexOf('MESSAGE_INTROUVABLE') !== -1) return 'Ce message n’existe plus.';
     if (texte.indexOf('HORS_LIGNE') !== -1 || texte.indexOf('REPONSE_VIDE') !== -1) {
       return 'Le tchat a besoin d’une connexion à la base.';
     }
@@ -496,7 +516,10 @@
             if (paire.cle === 'feed') throw res.error;
             return;
           }
-          if (paire.cle === 'feed') etat.messages = res.data || [];
+          if (paire.cle === 'feed') {
+            etat.messages = res.data || [];
+            etat.annonces = etat.messages.filter(function (m) { return !!m.is_annonce; });
+          }
           if (paire.cle === 'stats') etat.stats = res.data || null;
           if (paire.cle === 'journal') etat.journal = res.data || [];
           if (paire.cle === 'fils') etat.fils = res.data || [];
@@ -576,22 +599,15 @@
     UI.clear(racine);
 
     /* --- en-tête ------------------------------------------------------- */
-    dom.bascule = UI.el('button', {
-      type: 'button',
-      class: 'tchat-switch',
-      'aria-pressed': 'true',
-      onclick: function () {
-        etat.filtre = !etat.filtre;
-        garderPrefs();
-        peindre();
-        UI.toast(
-          etat.filtre ? 'Filtre de gentillesse activé.' : 'Filtre désactivé : les messages partent tels quels.',
-          etat.filtre ? 'success' : 'warning'
-        );
-      }
+    /* Le filtre n'est pas une option : il n'y a volontairement aucun bouton
+       pour le couper. Ce badge le rappelle. */
+    dom.verrou = UI.el('span', {
+      class: 'tchat-verrou',
+      title: 'Le filtre ne peut pas être désactivé : chaque message, public ou privé, est relu avant publication.',
+      role: 'status'
     }, [
-      UI.el('span', { class: 'tchat-switch-rail' }, [UI.el('span', { class: 'tchat-switch-knob' })]),
-      UI.el('span', { class: 'tchat-switch-text', text: 'Filtre de gentillesse' })
+      UI.el('span', { class: 'tchat-verrou-ico', text: '🔒' }),
+      UI.el('span', { class: 'hide-sm', text: 'Filtre obligatoire' })
     ]);
 
     dom.niveaux = UI.el('div', { class: 'tchat-seg', role: 'group', 'aria-label': 'Niveau de gentillesse' });
@@ -649,11 +665,11 @@
         UI.el('h2', { id: 'tchat-title', text: 'Tchats' }),
         UI.el('p', {
           class: 'sub',
-          text: 'Un filtre de gentillesse relit chaque message, public comme privé, avant publication.'
+          text: 'Chaque message, public comme privé, est relu et inversé si besoin. Le filtre est obligatoire pour tout le monde.'
         })
       ]),
       UI.el('div', { class: 'tchat-outils' }, [
-        dom.bascule,
+        dom.verrou,
         dom.niveaux,
         dom.btnStats,
         dom.btnCompliment,
@@ -683,18 +699,30 @@
       onclick: function () { adoucir(); }
     }, [UI.el('span', { text: '✨' }), UI.el('span', { class: 'hide-sm', text: 'Inverser' })]);
 
+    dom.btnAnnonce = null;
+    if (peutAnnoncer()) {
+      dom.btnAnnonce = UI.el('button', {
+        type: 'button',
+        class: 'btn btn-ghost btn-sm tchat-annonce-bouton',
+        title: 'Publier une annonce visible en haut du tchat de classe',
+        onclick: function () { basculerAnnonce(); }
+      }, [UI.el('span', { text: '📣' }), UI.el('span', { class: 'hide-sm', text: 'Annonce' })]);
+    }
+
     dom.form = UI.el('form', {
       class: 'chat-form',
       onsubmit: function (evenement) {
         evenement.preventDefault();
         envoyer(null);
       }
-    }, [dom.btnAdoucir, dom.champ, dom.btnEnvoyer]);
+    }, [dom.btnAnnonce, dom.btnAdoucir, dom.champ, dom.btnEnvoyer]);
 
     dom.reponse = UI.el('div', { class: 'tchat-reponse', hidden: true });
+    dom.annonces = UI.el('div', { class: 'tchat-annonces', hidden: true });
     dom.epingles = UI.el('div', { class: 'tchat-epingles', hidden: true });
 
     dom.panneauClasse = UI.el('div', { class: 'tchat-panneau', dataset: { panneau: 'classe' } }, [
+      dom.annonces,
       dom.epingles,
       dom.log,
       dom.reponse,
@@ -818,16 +846,25 @@
   function peindre() {
     if (!racine || !etat.monte) return;
 
-    dom.bascule.setAttribute('aria-pressed', etat.filtre ? 'true' : 'false');
-    dom.bascule.classList.toggle('is-off', !etat.filtre);
-
     var force = complimentForce();
     if (force && etat.niveau !== 'ultra') etat.niveau = 'ultra';
 
     UI.$$('.tchat-seg-btn', dom.niveaux).forEach(function (bouton) {
       bouton.classList.toggle('is-active', bouton.dataset.niveau === etat.niveau);
-      bouton.disabled = !etat.filtre || force;
+      bouton.disabled = !!force;
+      bouton.title = force
+        ? 'Compliment forcé : tout le monde écrit en version Mielleux'
+        : NIVEAUX[bouton.dataset.niveau].aide;
     });
+
+    if (dom.btnAnnonce) {
+      dom.btnAnnonce.classList.toggle('is-active', etat.annonce);
+      dom.btnAnnonce.setAttribute('aria-pressed', etat.annonce ? 'true' : 'false');
+      dom.champ.placeholder = etat.annonce
+        ? '📣 Annonce à toute la classe… (Entrée pour publier)'
+        : 'Écris à la classe… (Entrée pour envoyer)';
+      if (dom.form) dom.form.classList.toggle('is-annonce', etat.annonce);
+    }
 
     if (dom.btnCompliment) {
       dom.btnCompliment.classList.toggle('is-active', force);
@@ -864,6 +901,7 @@
 
     if (etat.onglet === 'classe') {
       peindreMessages();
+      peindreAnnonces();
       peindreEpingles();
       peindreReponse();
     } else {
@@ -949,6 +987,18 @@
       );
     }
 
+    if (message.is_annonce) {
+      meta.push(UI.el('span', { class: 'tchat-badge tchat-badge--annonce', title: 'Annonce de l’encadrement', text: '📣 annonce' }));
+    }
+
+    if (message.edited_at) {
+      meta.push(UI.el('span', { class: 'tchat-badge tchat-badge--edit', title: 'Message modifié par un administrateur', text: 'modifié' }));
+    }
+
+    if (message.hidden) {
+      meta.push(UI.el('span', { class: 'tchat-badge tchat-badge--masque', title: 'Message masqué : invisible pour les autres', text: 'masqué' }));
+    }
+
     var children = [UI.el('div', { class: 'msg-meta' }, meta)];
 
     if (message.reply_to) {
@@ -987,7 +1037,26 @@
       }
     }
 
-    if (mien || estStaff()) {
+    /* Admin : masquer (bloquer) et modifier, en plus de supprimer. */
+    if (!cible && estAdmin()) {
+      actions.appendChild(UI.el('button', {
+        type: 'button',
+        class: 'tchat-action' + (message.hidden ? ' is-on' : ''),
+        title: message.hidden ? 'Rétablir ce message' : 'Masquer ce message (bloquer)',
+        'aria-label': message.hidden ? 'Rétablir le message' : 'Masquer le message',
+        onclick: function () { masquerMessage(message); }
+      }, [UI.el('span', { text: message.hidden ? '👁' : '🙈' })]));
+
+      actions.appendChild(UI.el('button', {
+        type: 'button',
+        class: 'tchat-action',
+        title: 'Modifier le texte de ce message',
+        'aria-label': 'Modifier le message',
+        onclick: function () { modifierMessage(message); }
+      }, [UI.el('span', { text: '✏️' })]));
+    }
+
+    if (mien || estStaff() || estAdmin()) {
       actions.appendChild(UI.el('button', {
         type: 'button',
         class: 'tchat-suppr',
@@ -999,7 +1068,10 @@
 
     if (actions.childNodes.length) children.push(actions);
 
-    return UI.el('div', { class: 'msg' + (mien ? ' msg--mine' : '') + (message.pending ? ' msg--pending' : '') }, [
+    var classes = 'msg' + (mien ? ' msg--mine' : '') + (message.pending ? ' msg--pending' : '') +
+      (message.is_annonce ? ' msg--annonce' : '') + (message.hidden ? ' msg--masque' : '');
+
+    return UI.el('div', { class: classes }, [
       UI.avatar(auteur, { size: 30 }),
       UI.el('div', { class: 'msg-col' }, children)
     ]);
@@ -1100,6 +1172,147 @@
         UI.el('b', { text: nomDe(message.author_id) + ' : ' }),
         UI.el('span', { text: String(message.body).slice(0, 110) })
       ]));
+    });
+  }
+
+  function peindreAnnonces() {
+    if (!dom.annonces) return;
+
+    var liste = (etat.annonces || []).filter(function (m) { return !m.hidden; });
+
+    if (!liste.length) {
+      dom.annonces.hidden = true;
+      UI.clear(dom.annonces);
+      return;
+    }
+
+    dom.annonces.hidden = false;
+    UI.clear(dom.annonces);
+
+    dom.annonces.appendChild(UI.el('span', { class: 'tchat-annonces-titre' }, [
+      UI.el('span', { text: '📣' }),
+      UI.el('span', { text: 'Annonces de l’encadrement' })
+    ]));
+
+    liste.slice(-3).forEach(function (message) {
+      var heure = new Date(message.created_at).toLocaleString('fr-FR', {
+        day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+      });
+
+      dom.annonces.appendChild(UI.el('div', { class: 'tchat-annonce' }, [
+        UI.el('div', { class: 'tchat-annonce-txt' }, [
+          UI.el('b', { text: nomDe(message.author_id) + ' · ' }),
+          UI.el('span', { text: String(message.body).slice(0, 180) }),
+          UI.el('span', { class: 'faint', text: ' · ' + heure })
+        ]),
+        estStaff() || estAdmin()
+          ? UI.el('button', {
+              type: 'button',
+              class: 'tchat-annonce-x',
+              title: 'Retirer cette annonce',
+              'aria-label': 'Retirer cette annonce',
+              onclick: function () { supprimer(message.id, 'classe'); }
+            }, [UI.icon('x', { size: 12 })])
+          : null
+      ]));
+    });
+  }
+
+  /* --------------------------------------------------------------------------
+   * Annonces : mode de rédaction réservé à l'encadrement
+   * ----------------------------------------------------------------------- */
+  function basculerAnnonce() {
+    if (!peutAnnoncer()) return;
+    etat.annonce = !etat.annonce;
+    peindre();
+    if (etat.annonce && dom.champ) dom.champ.focus();
+    if (etat.annonce) {
+      UI.toast('Mode annonce : ton message sera publié en haut du tchat.', 'info');
+    }
+  }
+
+  /* --------------------------------------------------------------------------
+   * Admin : masquer / rétablir un message
+   * ----------------------------------------------------------------------- */
+  function masquerMessage(message) {
+    var masquer = !message.hidden;
+
+    rpc('admin_message_hide', { p_id: message.id, p_hidden: masquer })
+      .then(function (res) {
+        if (res.error) throw res.error;
+        UI.toast(
+          masquer ? 'Message masqué : les autres ne le voient plus.' : 'Message rétabli pour tout le monde.',
+          'success'
+        );
+        return charger(true);
+      })
+      .catch(function (erreur) { UI.err(messageErreur(erreur)); });
+  }
+
+  /* --------------------------------------------------------------------------
+   * Admin : modifier le texte d'un message (le filtre s'applique aussi)
+   * ----------------------------------------------------------------------- */
+  function modifierMessage(message) {
+    var champ = UI.el('textarea', {
+      class: 'chat-input',
+      rows: '3',
+      maxlength: String(MAX_CARACTERES),
+      value: message.body
+    });
+    champ.value = message.body;
+
+    var aide = UI.el('p', { class: 'sub', style: { fontSize: '.82rem' },
+      text: 'Le nouveau texte passe lui aussi par le filtre : impossible de publier une insulte.' });
+
+    var piedEnregistrer, piedFiltrer;
+
+    var modal = UI.modal({
+      title: 'Modifier le message',
+      eye: 'edit',
+      body: UI.frag([aide, champ]),
+      footer: [
+        UI.el('button', { type: 'button', class: 'btn btn-ghost', text: 'Annuler',
+          onclick: function () { modal.close(); } }),
+        piedFiltrer = UI.el('button', {
+          type: 'button', class: 'btn btn-ghost', text: '✨ Inverser',
+          onclick: function () {
+            var texte = String(champ.value || '').trim();
+            if (!texte) { champ.focus(); return; }
+            analyserAvecIA(texte).then(function (resultat) {
+              champ.value = resultat.doux || texte;
+              UI.toast('Texte inversé : il dit maintenant le contraire, sans insulte.', 'info');
+            });
+          }
+        }),
+        piedEnregistrer = UI.el('button', {
+          type: 'button', class: 'btn btn-primary', text: 'Enregistrer',
+          onclick: function () {
+            var texte = String(champ.value || '').trim();
+            if (!texte) { champ.focus(); return; }
+
+            piedEnregistrer.disabled = true;
+            piedFiltrer.disabled = true;
+
+            /* On repasse le texte par le filtre avant l'enregistrement. */
+            analyserAvecIA(texte)
+              .then(function (resultat) {
+                var version = resultat.flagged ? (resultat.doux || texte) : texte;
+                return rpc('admin_message_edit', { p_id: message.id, p_body: version });
+              })
+              .then(function (res) {
+                if (res.error) throw res.error;
+                modal.close();
+                UI.toast('Message modifié.', 'success');
+                return charger(true);
+              })
+              .catch(function (erreur) {
+                piedEnregistrer.disabled = false;
+                piedFiltrer.disabled = false;
+                UI.err(messageErreur(erreur));
+              });
+          }
+        })
+      ]
     });
   }
 
@@ -1428,21 +1641,17 @@
       return;
     }
 
+    var annonce = !cible && etat.annonce && peutAnnoncer();
+
     etat.envoi = true;
     reglerBoutons(true);
-    dom.statut.textContent = etat.filtre ? 'Le filtre de gentillesse relit ton message…' : 'Envoi…';
+    dom.statut.textContent = 'Le filtre de gentillesse relit ton message…';
 
-    var analyse = etat.filtre
-      ? analyserAvecIA(texte)
-      : Promise.resolve({
-          flagged: false, categories: [], severity: 0,
-          doux: texte, genant: texte, ultra: texte, source: 'filtre-off'
-        });
-
-    analyse
+    /* Le filtre ne se désactive pas : tout message passe par l'analyse. */
+    analyserAvecIA(texte)
       .then(function (resultat) {
-        var version = etat.filtre ? (resultat[etat.niveau] || resultat.doux || texte) : texte;
-        return envoyerAuServeur(version, texte, resultat, cible);
+        var version = resultat[etat.niveau] || resultat.doux || texte;
+        return envoyerAuServeur(version, texte, resultat, cible, annonce);
       })
       .then(function () {
         champ.value = '';
@@ -1469,8 +1678,8 @@
     });
   }
 
-  function envoyerAuServeur(version, original, analyse, cible) {
-    var adouci = !!(etat.filtre && analyse && analyse.flagged);
+  function envoyerAuServeur(version, original, analyse, cible, annonce) {
+    var adouci = !!(analyse && analyse.flagged);
 
     var enveloppe = {
       p_body: version,
@@ -1488,7 +1697,9 @@
       enveloppe.p_reply_to = etat.reponse.id;
     }
 
-    var appel = cible ? rpc('private_send', enveloppe) : rpc('class_chat_send', enveloppe);
+    var appel = cible
+      ? rpc('private_send', enveloppe)
+      : (annonce ? rpc('class_annonce_send', enveloppe) : rpc('class_chat_send', enveloppe));
 
     return appel.then(function (res) {
       if (res.error) throw res.error;
@@ -1505,9 +1716,12 @@
         });
       }
 
-      if (adouci) {
+      if (annonce) {
+        UI.toast('Annonce publiée en haut du tchat de classe.', 'success');
+        etat.annonce = false;
+      } else if (adouci) {
         UI.toast(
-          'Message adouci avant publication (niveau ' + NIVEAUX[etat.niveau].label + ').',
+          'Message inversé avant publication (niveau ' + NIVEAUX[etat.niveau].label + ').',
           'info'
         );
       }
