@@ -513,6 +513,8 @@
       PRENOM_PRIS: 'Ce prénom est déjà utilisé dans la classe. Ajoute ton initiale de nom si besoin.',
       COMPTE_DEJA_ACTIVE: 'Ce compte est déjà activé. Connecte-toi plutôt.',
       CODE_INVALIDE: 'Code refusé. Vérifie qu’il est recopié exactement (majuscules et tirets compris).',
+      CODE_DEJA_UTILISE: 'Ce code a déjà créé un compte. Connecte-toi plutôt avec ton prénom et ce code comme mot de passe, ou utilise un autre code.',
+      CODE_MAUVAIS_ROLE: 'Ce code n’est pas celui du rôle coché. Vérifie la case Élève / Suppléant / Délégué, ou demande le bon code.',
       MONTANT_INVALIDE: 'Le nombre de points demandé est hors limites.',
       INTERDIT: 'Tu n’as pas le droit de faire ça.',
       ELEVE_INTROUVABLE: 'Cet élève n’existe plus dans la liste.',

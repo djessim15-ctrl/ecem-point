@@ -133,7 +133,15 @@ select s.label, s.role,
 ```
 
 Le code est **sensible à la casse** : il doit être recopié exactement
-(majuscules et tirets compris). Pour « rendre » un code consommé par erreur :
+(majuscules et tirets compris). Les espaces autour sont ignorés.
+
+Trois refus possibles, désormais distincts à l’écran :
+
+| Message | Signification |
+|---|---|
+| **Code refusé…** | le code n’existe pas (faute de frappe) |
+| **Ce code a déjà créé un compte** | une seule utilisation : connecte-toi avec ton prénom + ce code, ou prends un autre code |
+| **Ce code n’est pas celui du rôle coché** | le code est valide, mais pour l’autre rôle | Pour « rendre » un code consommé par erreur :
 
 ```sql
 update public.staff_codes
