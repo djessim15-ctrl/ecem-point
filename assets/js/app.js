@@ -151,13 +151,21 @@
       .then(function () {
         setBootText('Chargement des points…');
         if (dom.boot) dom.boot.classList.add('is-hidden');
-        buildNavigation();
-        paintIdentity();
-        paintThemeButtons();
-        if (Store.state.demo) buildDemoStrip();
-        bindStoreEvents();
-        bindViewControls();
-        showTab(initialTab());
+        runStep('menu', buildNavigation);
+        runStep('identité', paintIdentity);
+        runStep('thème', paintThemeButtons);
+        if (Store.state.demo) runStep('bandeau démo', buildDemoStrip);
+        runStep('abonnements', bindStoreEvents);
+        runStep('commandes', bindViewControls);
+
+        try {
+          showTab(initialTab());
+        } catch (error) {
+          if (window.console && console.error) console.error('[ECEM] premier écran', error);
+          fatal('L’interface n’a pas pu démarrer : ' + ((error && error.message) || error));
+          return;
+        }
+
         updateLiveState('SUBSCRIBED');
         paintFooter();
       })
@@ -189,6 +197,15 @@
     var hash = String(window.location.hash || '').replace('#', '');
     var allowed = tabsFor().some(function (tab) { return tab.id === hash; });
     return allowed ? hash : 'home';
+  }
+
+  function runStep(label, fn) {
+    try {
+      fn();
+    } catch (error) {
+      if (window.console && console.error) console.error('[ECEM] ' + label, error);
+      UI.err('Problème au démarrage (' + label + ') : ' + ((error && error.message) || error));
+    }
   }
 
   function setBootText(text) {
@@ -665,19 +682,66 @@
   /* ---------------------------------------------------------------------- */
   function renderCurrent() {
     if (!Store.state.ready) return;
-    switch (state.tab) {
-      case 'home': renderHome(); break;
-      case 'give': renderGive(); break;
-      case 'send': renderSend(); break;
-      case 'rank': renderRank(); break;
-      case 'stats': renderStats(); break;
-      case 'history': renderHistory(); break;
-      case 'badges': renderBadges(); break;
-      case 'chat': renderChat(); break;
-      case 'profile': renderProfile(); break;
-      default: renderHome();
+
+    /* Un écran qui plante ne doit jamais laisser la page vide : on isole le
+     * rendu et, en cas d'erreur, on affiche une carte lisible dans la vue. */
+    try {
+      switch (state.tab) {
+        case 'home': renderHome(); break;
+        case 'give': renderGive(); break;
+        case 'send': renderSend(); break;
+        case 'rank': renderRank(); break;
+        case 'stats': renderStats(); break;
+        case 'history': renderHistory(); break;
+        case 'badges': renderBadges(); break;
+        case 'chat': renderChat(); break;
+        case 'profile': renderProfile(); break;
+        default: renderHome();
+      }
+    } catch (error) {
+      if (window.console && console.error) console.error('[ECEM] rendu « ' + state.tab + ' »', error);
+      renderCrashCard(error);
     }
+
     paintFooter();
+  }
+
+  /* Carte affichée à la place d'un écran qui a planté. */
+  function renderCrashCard(error) {
+    var host = document.getElementById('view-' + state.tab) || document.getElementById('view-home');
+    if (!host) return;
+
+    var detail = String((error && error.message) || error || 'Erreur inconnue');
+
+    UI.clear(host);
+    host.appendChild(UI.el('div', { class: 'empty' }, [
+      UI.el('span', { class: 'empty-ico' }, [UI.icon('alert', { size: 26 })]),
+      UI.el('div', { class: 'empty-title', text: 'Cet écran n’a pas pu s’afficher' }),
+      UI.el('div', { class: 'empty-text', text: detail }),
+      UI.el('div', { class: 'row', style: { marginTop: '10px' } }, [
+        UI.el('button', {
+          type: 'button', class: 'btn btn-primary', text: 'Réessayer',
+          onclick: function () { showTab(state.tab); }
+        }),
+        UI.el('button', {
+          type: 'button', class: 'btn btn-ghost', text: 'Autre écran',
+          onclick: function () { showTab('home'); }
+        }),
+        UI.el('button', {
+          type: 'button', class: 'btn btn-soft', text: 'Réparer l’affichage',
+          onclick: function () { repairDisplay(); }
+        })
+      ])
+    ]));
+  }
+
+  function repairDisplay() {
+    var PWA = window.ECEM.PWA;
+    if (PWA && typeof PWA.repair === 'function') {
+      PWA.repair();
+      return;
+    }
+    window.location.reload();
   }
 
   /* ---------------------------------------------------------------------- */

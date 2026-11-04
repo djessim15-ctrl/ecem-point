@@ -110,6 +110,37 @@ latence, et propose **Ouvrir Supabase** + **Réessayer**.
 | **Suppléant** (2) | Voir toute la classe, l’historique et le classement · participer au **tchat** délégués ↔ suppléants · *(peut aussi donner/retirer des points si le réglage `suppleant_can_award` est activé — voir § 8)* |
 | **Élève** | Voir ses points · **envoyer ses points à un autre élève** (transfert direct, immédiat) · voir son historique personnel · voir le classement |
 
+### Codes d’inscription (délégué / suppléant)
+
+Un code = **un compte**, utilisable **une seule fois**. Il n’est jamais stocké
+en clair (seule son empreinte SHA‑256 est en base), donc il est **impossible de
+le relire** : si un code est perdu ou déjà consommé, on en crée un nouveau.
+
+```sql
+-- SQL Editor → créer un code (remplacer par le code choisi, entre guillemets)
+insert into public.staff_codes (label, role, code_hash)
+values ('Délégué 5', 'delegue',
+        encode(extensions.digest('DEL-XXXX-XXXX', 'sha256'), 'hex'))
+on conflict (code_hash) do nothing;
+
+-- Voir l’état des codes : LIBRE ou UTILISÉ, et par qui
+select s.label, s.role,
+       case when s.used_by is null then 'LIBRE' else 'UTILISÉ' end as etat,
+       p.prenom as utilise_par
+  from public.staff_codes s
+  left join public.profiles p on p.id = s.used_by
+ order by s.role, s.created_at;
+```
+
+Le code est **sensible à la casse** : il doit être recopié exactement
+(majuscules et tirets compris). Pour « rendre » un code consommé par erreur :
+
+```sql
+update public.staff_codes
+   set used_by = null, used_at = null, claimed_token = null, claimed_at = null
+ where label = 'Délégué 5';
+```
+
 Règles du jeu appliquées côté serveur :
 
 - un don est borné entre `award_min` (1) et `award_max` (4) ;
