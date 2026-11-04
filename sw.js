@@ -7,7 +7,7 @@
  * Les requêtes vers Supabase (autre origine) ne sont JAMAIS mises en cache :
  * les points et le tchat restent toujours à jour.
  * ==========================================================================*/
-const VERSION = 'ecem-point-v2.1.1';
+const VERSION = 'ecem-point-v2.1.2';
 const SHELL = [
   './',
   'index.html',
