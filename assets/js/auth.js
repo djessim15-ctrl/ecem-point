@@ -493,6 +493,18 @@
         setBusy(dom.btnSignup, true, 'Création du compte…');
         return sb.auth.signUp({ email: wantEmail, password: password }).then(function (res) {
           if (res.error) throw res.error;
+
+          /* Supabase ne signale pas un e-mail déjà pris : il renvoie un
+             utilisateur fantôme (identities vide) et aucune session.
+             On transforme ce silence en message clair. */
+          var ghost = res.data && res.data.user;
+          if (ghost && Array.isArray(ghost.identities) && ghost.identities.length === 0) {
+            throw new Error(
+              'Ce prénom a déjà un compte sur le site. Choisis un autre prénom, ' +
+              'ou connecte-toi dans l’onglet Connexion si c’est le tien.'
+            );
+          }
+
           if (!res.data.session) {
             throw new Error(
               'Le compte a été créé mais la session n’est pas ouverte : active « autoconfirm » ' +
