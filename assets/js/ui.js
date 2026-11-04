@@ -550,8 +550,20 @@
     if (low.indexOf('auth session missing') >= 0 || low.indexOf('jwt expired') >= 0) {
       return 'Session expirée. Reconnecte-toi.';
     }
-    if (low.indexOf('email rate limit') >= 0 || low.indexOf('rate limit') >= 0) {
+    if (low.indexOf('email rate limit') >= 0 || low.indexOf('rate limit') >= 0 ||
+        low.indexOf('too many requests') >= 0 || low.indexOf('too many attempts') >= 0 ||
+        low.indexOf('after ') === 0 && low.indexOf(' seconds') >= 0 ||
+        Number(err && err.status) === 429) {
       return 'Trop de tentatives. Attends une minute puis réessaie.';
+    }
+    if (low.indexOf('email not confirmed') >= 0) {
+      return 'Ce compte n’est pas encore activé : termine l’inscription avant de te connecter.';
+    }
+    if (low.indexOf('signups not allowed') >= 0 || low.indexOf('signup is disabled') >= 0) {
+      return 'Les inscriptions sont fermées pour le moment. Demande à un délégué de t’ajouter.';
+    }
+    if (low.indexOf('user not found') >= 0) {
+      return 'Aucun compte ne correspond à ce prénom.';
     }
     if (low.indexOf('failed to fetch') >= 0 || low.indexOf('networkerror') >= 0 || low.indexOf('network request failed') >= 0) {
       return 'Connexion impossible. Vérifie ton réseau puis réessaie.';

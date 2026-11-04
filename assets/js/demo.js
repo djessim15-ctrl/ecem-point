@@ -599,7 +599,27 @@
     },
     cancel_event: function (args) {
       for (var i = 0; i < events.length; i++) {
-        if (events[i].id === args.p_event) { events.splice(i, 1); return { annule: true }; }
+        if (events[i].id !== args.p_event) continue;
+
+        var evt = events[i];
+        var sujet = byId(evt.subject_id);
+        var autre = byId(evt.counterparty_id);
+
+        if (evt.kind === 'gain' && sujet) {
+          sujet.points = Math.max(0, sujet.points - evt.amount);
+        } else if (evt.kind === 'retrait' && sujet) {
+          sujet.points += evt.amount;
+        } else if (evt.kind === 'transfert') {
+          var retour = Math.min(evt.amount, autre ? autre.points : 0);
+          if (autre) autre.points -= retour;
+          if (sujet) sujet.points += retour;
+        }
+
+        if (sujet) touchProfile(sujet);
+        if (autre) touchProfile(autre);
+
+        events.splice(i, 1);
+        return { annule: true, kind: evt.kind, amount: evt.amount };
       }
       fail('INTROUVABLE');
     },
@@ -697,13 +717,23 @@
       if (target.role !== 'eleve') fail('CIBLE_INVALIDE');
       if (!args.p_amount || args.p_amount < settings.award_min || args.p_amount > settings.award_max) fail('MONTANT_INVALIDE');
 
-      target.points += args.p_amount;
-      addEvent({
-        id: uuid('evt'), kind: 'gain', amount: args.p_amount, subject_id: target.id,
+      var dore = settings.golden_until && new Date(settings.golden_until) > new Date();
+      var montant = args.p_amount * (dore ? (settings.golden_multiplier || 2) : 1);
+
+      target.points += montant;
+      var evtGain = {
+        id: uuid('evt'), kind: 'gain', amount: montant, subject_id: target.id,
         counterparty_id: null, actor_id: me.id, note: null, created_at: new Date().toISOString()
-      });
+      };
+      addEvent(evtGain);
       touchProfile(target);
-      return { prenom: target.prenom, points: target.points };
+      return {
+        prenom: target.prenom,
+        points: target.points,
+        amount: montant,
+        bonus: montant - args.p_amount,
+        event_id: evtGain.id
+      };
     },
     remove_points: function (args) {
       var me = byId(db.meId);
@@ -715,14 +745,21 @@
       var removed = Math.min(args.p_amount, target.points);
       target.points -= removed;
 
+      var evtRetrait = null;
       if (removed > 0) {
-        addEvent({
+        evtRetrait = {
           id: uuid('evt'), kind: 'retrait', amount: removed, subject_id: target.id,
           counterparty_id: null, actor_id: me.id, note: null, created_at: new Date().toISOString()
-        });
+        };
+        addEvent(evtRetrait);
       }
       touchProfile(target);
-      return { prenom: target.prenom, points: target.points, retires: removed };
+      return {
+        prenom: target.prenom,
+        points: target.points,
+        retires: removed,
+        event_id: evtRetrait ? evtRetrait.id : null
+      };
     },
     transfer_points: function (args) {
       var me = byId(db.meId);
@@ -738,13 +775,19 @@
       me.points -= args.p_amount;
       target.points += args.p_amount;
 
-      addEvent({
+      var evtTransfert = {
         id: uuid('evt'), kind: 'transfert', amount: args.p_amount, subject_id: me.id,
         counterparty_id: target.id, actor_id: me.id, note: null, created_at: new Date().toISOString()
-      });
+      };
+      addEvent(evtTransfert);
       touchProfile(me);
       touchProfile(target);
-      return { points: me.points, cible_prenom: target.prenom, cible_points: target.points };
+      return {
+        points: me.points,
+        cible_prenom: target.prenom,
+        cible_points: target.points,
+        event_id: evtTransfert.id
+      };
     }
   };
 

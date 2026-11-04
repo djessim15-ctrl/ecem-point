@@ -155,6 +155,15 @@
   }
 
   function enterRecovery(session) {
+    if (!session || !session.user) {
+      showAlert(
+        'Mot de passe accepté, mais la session n’a pas pu être enregistrée sur cet appareil. ' +
+        'Vérifie que les cookies et le stockage local ne sont pas bloqués, puis réessaie.',
+        'error'
+      );
+      return;
+    }
+
     recoveryMode = true;
     var brut = (session.user.email || '').split('@')[0] || '';
 
