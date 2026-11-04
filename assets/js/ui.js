@@ -512,7 +512,7 @@
       PRENOM_INVALIDE: 'Prénom refusé : 2 à 24 caractères, lettres, chiffres, espace, tiret ou apostrophe.',
       PRENOM_PRIS: 'Ce prénom est déjà utilisé dans la classe. Ajoute ton initiale de nom si besoin.',
       COMPTE_DEJA_ACTIVE: 'Ce compte est déjà activé. Connecte-toi plutôt.',
-      CODE_INVALIDE: 'Code refusé : il est incorrect ou il a déjà servi (un code ne fonctionne qu’une fois).',
+      CODE_INVALIDE: 'Code refusé. Vérifie qu’il est recopié exactement (majuscules et tirets compris).',
       MONTANT_INVALIDE: 'Le nombre de points demandé est hors limites.',
       INTERDIT: 'Tu n’as pas le droit de faire ça.',
       ELEVE_INTROUVABLE: 'Cet élève n’existe plus dans la liste.',

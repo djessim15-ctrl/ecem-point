@@ -92,6 +92,48 @@
   }
 
   /* -------------------------------------------------------------------------
+   * Réparation de l'affichage
+   * -------------------------------------------------------------------------
+   * Après un déploiement, un service worker ou un cache HTTP peut garder un
+   * ancien JavaScript à côté d'une nouvelle page : l'interface paraît vide.
+   * Ce bouton efface caches et service worker, puis recharge avec un paramètre
+   * qui contourne le cache du navigateur. */
+  PWA.repair = function (options) {
+    options = options || {};
+    var tasks = [];
+
+    if ('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations) {
+      tasks.push(
+        navigator.serviceWorker
+          .getRegistrations()
+          .then(function (list) {
+            return Promise.all(list.map(function (registration) {
+              return registration.unregister();
+            }));
+          })
+          .catch(function () {})
+      );
+    }
+
+    if (window.caches && window.caches.keys) {
+      tasks.push(
+        window.caches
+          .keys()
+          .then(function (keys) {
+            return Promise.all(keys.map(function (key) { return window.caches.delete(key); }));
+          })
+          .catch(function () {})
+      );
+    }
+
+    return Promise.all(tasks).then(function () {
+      var url = new URL(window.location.href);
+      url.searchParams.set('fresh', String(Date.now()));
+      window.location.replace(url.toString());
+    });
+  };
+
+  /* -------------------------------------------------------------------------
    * Petit indicateur hors ligne (réutilise le système de toasts s'il est là)
    * ---------------------------------------------------------------------- */
   function netUpdate() {
