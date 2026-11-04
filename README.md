@@ -48,8 +48,9 @@ python3 -m http.server 8080
 | **Export CSV** | Historique, Profil | téléchargement de l’historique (compatible Excel) |
 | **Recherche insensible aux accents** | toutes les listes | « ines » trouve « Inès » |
 | **Tchat amélioré** | Tchat | envoi optimiste, séparateurs de jours, avatars, sélecteur d’emoji, Entrée pour envoyer |
-| **Tchat de classe** | Tchat de classe | tous les rôles, messages adoucis par IA, original masquable, journal des détections |
-| **Filtre de gentillesse** | Tchat de classe | 3 niveaux (Doux / Gênant / Ultra), interrupteur, repli local hors-ligne |
+| **Tchat de classe** | Tchats | tous les rôles, messages adoucis par IA, journal des détections |
+| **Messages privés** | Tchats → Messages privés | conversations 1 à 1, filtrées comme le tchat public |
+| **Filtre de gentillesse** | Tchats | 3 niveaux (Doux / Gênant / Ultra), interrupteur, repli local hors-ligne |
 | **Confettis, sons, vibrations** | partout | retours immédiats, désactivables dans le profil |
 | **Mode démo** | `app.html?demo=1` | classe fictive en mémoire, bascule élève / suppléant / délégué |
 | **Installation PWA** | navigateur | manifeste, icônes, service worker (coquille hors ligne) |
@@ -588,10 +589,11 @@ personnelles**, puis le réécrit en trois versions de plus en plus gentilles :
 | **Gênant** | excuses et politesse exagérées, franchement gênant |
 | **Ultra** | absurde et mielleux, emojis partout |
 
-- **Bouton « Voir l’original »** sur les messages adoucis. La version brute
-  n’est renvoyée qu’à **son auteur** et à l’**encadrement** : c’est la fonction
-  `class_chat_feed()` qui masque la colonne aux autres (le navigateur ne la
-  reçoit jamais).
+- **Aucune version brute n’est exposée** : `class_chat_feed()` et
+  `private_feed()` la remplacent par `null`. Elle reste en base pour l’audit et
+  n’apparaît que dans le journal de modération.
+- **Le filtre s’applique à tout le monde**, délégués et suppléants compris :
+  aucun rôle n’est exempté.
 - **Panneau « Détections »** : totaux, répartition par catégorie et journal des
   derniers messages repérés.
 - **Interrupteur** pour couper le filtre : les messages partent alors tels
@@ -612,4 +614,16 @@ Si l’IA ne répond pas (hors-ligne, quota, panne), un **filtre local** prend l
 relais avec les mêmes trois niveaux : le message part quand même, adouci, et le
 journal indique `local` au lieu de `IA`.
 
-Migrations concernées : `0008_class_chat.sql`, `0009_moderation_ia.sql`.
+### Messages privés
+Deuxième onglet de « Tchats » : conversations 1 à 1 entre deux comptes, avec le
+même filtre, les mêmes trois niveaux et le même anti-flood (10 messages / 30 s).
+
+**Délégués et suppléants sont modérateurs** :
+- ils voient dans « Détections → Messages privés signalés » les messages privés
+  repérés (auteur → destinataire, extrait, catégorie) ;
+- ils peuvent les **supprimer** (`private_delete`, réservé à l’encadrement) ;
+- ils ne lisent **pas** les conversations privées ordinaires : seul ce qui a été
+  signalé par le filtre remonte.
+
+Migrations concernées : `0008_class_chat.sql`, `0009_moderation_ia.sql`,
+`0010_private_chat.sql`.

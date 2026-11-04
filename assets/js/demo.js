@@ -235,6 +235,42 @@
     }
   ];
 
+  /* Messages privés de démonstration (dont un signalé par le filtre). */
+  var privateMessages = [
+    {
+      id: 801, sender_id: 'demo-eleve-2', recipient_id: 'demo-eleve',
+      body: 'Salut ! Tu peux m’envoyer la photo du cours de maths ?',
+      body_raw: null, level: 'genant', flagged: false, categories: [], severity: 0,
+      source: 'ia:gpt-oss-120b', created_at: iso(2.4 * 3600000)
+    },
+    {
+      id: 803, sender_id: 'demo-eleve-2', recipient_id: 'demo-delegue',
+      body: 'Je suis désolé de t’avoir répondu comme ça, je m’excuse platement 🙏',
+      body_raw: 'Tu sers à rien comme délégué', level: 'genant',
+      flagged: true, categories: ['agressivite'], severity: 2,
+      source: 'ia:gpt-oss-120b', created_at: iso(1.1 * 3600000)
+    },
+    {
+      id: 804, sender_id: 'demo-delegue', recipient_id: 'demo-eleve-2',
+      body: 'Merci pour ce message. Si quelque chose ne va pas, viens m’en parler 🙂',
+      body_raw: null, level: 'genant', flagged: false, categories: [], severity: 0,
+      source: 'ia:gpt-oss-120b', created_at: iso(0.9 * 3600000)
+    },
+    {
+      id: 805, sender_id: 'demo-eleve-2', recipient_id: 'demo-suppleant',
+      body: 'Bonjour, est-ce que je peux te parler après le cours ?',
+      body_raw: null, level: 'genant', flagged: false, categories: [], severity: 0,
+      source: 'ia:gpt-oss-120b', created_at: iso(0.5 * 3600000)
+    },
+    {
+      id: 802, sender_id: 'demo-eleve', recipient_id: 'demo-eleve-2',
+      body: 'Je ne suis pas d’accord, mais je te respecte petit nuage.',
+      body_raw: 'Mais t’es vraiment un abruti ou quoi ?', level: 'doux',
+      flagged: true, categories: ['insulte'], severity: 2,
+      source: 'ia:gpt-oss-120b', created_at: iso(1.6 * 3600000)
+    }
+  ];
+
   var settings = {
     id: 1,
     suppleant_can_award: true,
@@ -470,6 +506,87 @@
             level: m.level,
             source: m.source || 'local',
             excerpt: m.body_raw || '',
+            created_at: m.created_at
+          };
+        });
+    },
+    private_threads: function () {
+      var moi = db.meId;
+      var vus = {};
+      var sortie = [];
+      privateMessages.forEach(function (m) {
+        if (m.sender_id !== moi && m.recipient_id !== moi) return;
+        var autre = m.sender_id === moi ? m.recipient_id : m.sender_id;
+        var deja = vus[autre];
+        if (!deja) {
+          deja = { other_id: autre, last_body: m.body, last_at: m.created_at, signales: 0 };
+          vus[autre] = deja;
+          sortie.push(deja);
+        }
+        if (new Date(m.created_at) >= new Date(deja.last_at)) {
+          deja.last_at = m.created_at;
+          deja.last_body = m.body;
+        }
+        if (m.flagged) deja.signales += 1;
+      });
+      sortie.forEach(function (fil) {
+        var profil = byId(fil.other_id);
+        fil.prenom = profil ? profil.prenom : 'Compte';
+        fil.role = profil ? profil.role : 'eleve';
+      });
+      return sortie.sort(function (a, b) { return new Date(b.last_at) - new Date(a.last_at); });
+    },
+    private_feed: function (args) {
+      var moi = db.meId;
+      return privateMessages
+        .filter(function (m) {
+          return (m.sender_id === moi && m.recipient_id === args.p_with)
+            || (m.sender_id === args.p_with && m.recipient_id === moi);
+        })
+        .sort(function (a, b) { return new Date(a.created_at) - new Date(b.created_at); });
+    },
+    private_send: function (args) {
+      if (!args.p_to) fail('DESTINATAIRE_INVALIDE');
+      var row = {
+        id: privateMessages.length + 900,
+        sender_id: db.meId,
+        recipient_id: args.p_to,
+        body: args.p_body,
+        body_raw: args.p_body_raw || null,
+        level: args.p_level || 'genant',
+        flagged: !!args.p_flagged,
+        categories: args.p_categories || [],
+        severity: args.p_severity || 0,
+        source: args.p_source || null,
+        created_at: new Date().toISOString()
+      };
+      privateMessages.push(row);
+      return { id: row.id, created_at: row.created_at, flagged: row.flagged };
+    },
+    private_delete: function (args) {
+      if (!(getRole() === 'delegue' || getRole() === 'suppleant')) fail('INTERDIT');
+      for (var i = privateMessages.length - 1; i >= 0; i--) {
+        if (String(privateMessages[i].id) === String(args.p_id)) privateMessages.splice(i, 1);
+      }
+      return true;
+    },
+    private_flagged: function () {
+      if (getRole() === 'eleve') fail('INTERDIT');
+      return privateMessages
+        .filter(function (m) { return m.flagged; })
+        .map(function (m) {
+          var exp = byId(m.sender_id);
+          var dest = byId(m.recipient_id);
+          return {
+            id: m.id,
+            sender_id: m.sender_id,
+            sender: exp ? exp.prenom : 'Compte',
+            recipient_id: m.recipient_id,
+            recipient: dest ? dest.prenom : 'Compte',
+            categories: m.categories || [],
+            severity: m.severity || 0,
+            level: m.level,
+            excerpt: m.body_raw || m.body,
             created_at: m.created_at
           };
         });
