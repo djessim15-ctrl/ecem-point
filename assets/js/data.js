@@ -31,7 +31,8 @@
     messages: [],
     ready: false,
     demo: !!window.ECEM.demo,
-    completedBadges: []
+    completedBadges: [],
+    isAdmin: false
   };
 
   var listeners = [];
@@ -64,6 +65,10 @@
       if (index >= 0) listeners.splice(index, 1);
     };
   }
+
+  Store.isAdmin = function () {
+    return !!state.isAdmin;
+  };
 
   Store.profileById = function (id) {
     for (var i = 0; i < state.profiles.length; i++) {
@@ -155,6 +160,8 @@
       }
       return loadMe(session.user.id);
     }).then(function () {
+      return loadAdminFlag();
+    }).then(function () {
       return loadAll();
     }).then(function () {
       state.ready = true;
@@ -166,7 +173,7 @@
   function loadMe(userId) {
     return sb
       .from('profiles')
-      .select('id, prenom, role, points, last_seen_at, created_at')
+      .select('id, prenom, role, points, last_seen_at, created_at, banned_at, ban_reason')
       .eq('id', userId)
       .maybeSingle()
       .then(function (res) {
@@ -181,8 +188,19 @@
       });
   }
 
+  function loadAdminFlag() {
+    return sb.rpc('am_i_admin').then(function (res) {
+      state.isAdmin = !res.error && res.data === true;
+      return state.isAdmin;
+    }).catch(function () {
+      state.isAdmin = false;
+      return false;
+    });
+  }
+
   function loadAll() {
     return Promise.all([
+      loadAdminFlag(),
       loadSettings(),
       loadProfiles(),
       loadEvents(),
@@ -201,7 +219,7 @@
   function loadProfiles() {
     return sb
       .from('profiles')
-      .select('id, prenom, role, points, last_seen_at, created_at')
+      .select('id, prenom, role, points, last_seen_at, created_at, banned_at, ban_reason')
       .order('prenom', { ascending: true })
       .then(function (res) {
         if (res.error) throw res.error;
@@ -263,6 +281,7 @@
 
   Store.refreshAll = function () {
     return Promise.all([
+      loadAdminFlag(),
       loadSettings(),
       loadProfiles(),
       loadEvents(),

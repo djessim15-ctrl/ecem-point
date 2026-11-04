@@ -277,7 +277,13 @@
   /* Navigation                                                             */
   /* ---------------------------------------------------------------------- */
   function tabsFor() {
-    return Store.isEleve() ? TABS.eleve : TABS.staff;
+    var tabs = (Store.isEleve() ? TABS.eleve : TABS.staff).slice();
+
+    if (Store.isAdmin && Store.isAdmin()) {
+      tabs.push({ id: 'admin', label: 'Administration', icon: 'shield', group: 'Compte' });
+    }
+
+    return tabs;
   }
 
   function tabById(id) {
@@ -361,7 +367,7 @@
 
     /* Le bouton flottant ne sert à rien sur les écrans d'action ou de saisie. */
     if (dom.fab) {
-      dom.fab.hidden = ['give', 'send', 'chat', 'tchat', 'profile'].indexOf(state.tab) !== -1;
+      dom.fab.hidden = ['give', 'send', 'chat', 'tchat', 'profile', 'admin'].indexOf(state.tab) !== -1;
     }
 
     if (state.tab === 'chat') {
@@ -685,6 +691,14 @@
   function renderCurrent() {
     if (!Store.state.ready) return;
 
+    /* Un compte suspendu par un administrateur ne voit plus que l'écran de
+     * suspension : tout le reste est remplacé. */
+    if (Store.state.me && Store.state.me.banned_at) {
+      renderSuspendu();
+      paintFooter();
+      return;
+    }
+
     /* Le tchat de classe ne sonde la base que lorsqu'il est affiché. */
     if (state.tab !== 'tchat' && window.ECEM && window.ECEM.ClassChat) {
       window.ECEM.ClassChat.stop();
@@ -704,6 +718,7 @@
         case 'chat': renderChat(); break;
         case 'tchat': renderTchat(); break;
         case 'profile': renderProfile(); break;
+        case 'admin': renderAdmin(); break;
         default: renderHome();
       }
     } catch (error) {
@@ -712,6 +727,28 @@
     }
 
     paintFooter();
+  }
+
+  function renderSuspendu() {
+    var host = document.getElementById('view-' + state.tab) || document.getElementById('view-home');
+    if (!host) return;
+
+    var motif = Store.state.me.ban_reason;
+
+    UI.clear(host);
+    host.appendChild(UI.el('div', { class: 'empty suspendu' }, [
+      UI.el('span', { class: 'empty-ico' }, [UI.icon('lock', { size: 28 })]),
+      UI.el('div', { class: 'empty-title', text: 'Compte suspendu' }),
+      UI.el('div', { class: 'empty-text', text: motif
+        ? 'Motif indiqué par l’encadrement : ' + motif
+        : 'Un administrateur a suspendu ce compte. Contacte l’encadrement pour en savoir plus.' }),
+      UI.el('div', { class: 'row', style: { marginTop: '12px', justifyContent: 'center' } }, [
+        UI.el('button', {
+          type: 'button', class: 'btn btn-ghost', text: 'Se déconnecter',
+          onclick: function () { Store.signOut().then(function () { goToLogin('À bientôt.'); }); }
+        })
+      ])
+    ]));
   }
 
   /* Carte affichée à la place d'un écran qui a planté. */
@@ -1751,6 +1788,26 @@
   }
 
   /* ---------------------------------------------------------------------- */
+  /* ADMINISTRATION                                                         */
+  /* ---------------------------------------------------------------------- */
+  function renderAdmin() {
+    var host = document.getElementById('admin-content') || document.getElementById('view-admin');
+    if (!host) return;
+
+    if (!Store.isAdmin || !Store.isAdmin()) {
+      UI.clear(host);
+      host.appendChild(UI.el('div', { class: 'empty' }, [
+        UI.el('span', { class: 'empty-ico' }, [UI.icon('lock', { size: 26 })]),
+        UI.el('div', { class: 'empty-title', text: 'Accès réservé' }),
+        UI.el('div', { class: 'empty-text', text: 'Cet espace est réservé aux administrateurs du site.' })
+      ]));
+      return;
+    }
+
+    if (window.ECEM.Admin) window.ECEM.Admin.mount(host);
+  }
+
+  /* ---------------------------------------------------------------------- */
   /* SUCCÈS                                                                 */
   /* ---------------------------------------------------------------------- */
   function renderBadges() {
@@ -2135,6 +2192,50 @@
     aboutBody.appendChild(danger);
 
     host.appendChild(about);
+
+    /* --- Accès administrateur ------------------------------------------ */
+    var adminCard = panel({ title: 'Administration', icon: 'shield' });
+    var adminBody = adminCard.querySelector('.panel-body');
+
+    if (Store.isAdmin && Store.isAdmin()) {
+      adminBody.appendChild(UI.el('p', { class: 'sub', style: { fontSize: '.86rem' },
+        text: 'Ce compte administre le site : suspendre, réactiver, changer les rôles ou supprimer un compte.' }));
+      adminBody.appendChild(UI.el('button', {
+        type: 'button', class: 'btn btn-primary btn-sm', style: { marginTop: '10px' },
+        text: 'Ouvrir l’administration',
+        onclick: function () { showTab('admin'); }
+      }));
+    } else {
+      var champCode = UI.el('input', {
+        class: 'input', type: 'password', inputmode: 'numeric', autocomplete: 'off',
+        placeholder: 'Code administrateur', 'aria-label': 'Code administrateur'
+      });
+
+      adminBody.appendChild(UI.el('p', { class: 'sub', style: { fontSize: '.86rem' },
+        text: 'Réservé à l’encadrement du site. Saisis le code pour débloquer l’onglet Administration.' }));
+      adminBody.appendChild(UI.el('div', { class: 'row', style: { marginTop: '10px' } }, [
+        champCode,
+        UI.el('button', {
+          type: 'button', class: 'btn btn-ghost btn-sm', text: 'Débloquer',
+          onclick: function () {
+            var code = String(champCode.value || '').trim();
+            if (!code) { champCode.focus(); return; }
+
+            var client = window.ECEM.sb;
+            client.rpc('admin_claim', { p_code: code }).then(function (res) {
+              if (res.error) { UI.err(UI.humanError(res.error)); return; }
+              UI.toast('Administration débloquée.', 'ok');
+              Store.refreshAll().then(function () {
+                buildNavigation();
+                renderCurrent();
+              }).catch(function () { renderCurrent(); });
+            });
+          }
+        })
+      ]));
+    }
+
+    host.appendChild(adminCard);
   }
 
   function prefToggle(opts) {
