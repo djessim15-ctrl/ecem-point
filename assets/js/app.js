@@ -2193,6 +2193,9 @@
 
     host.appendChild(about);
 
+    /* --- Ce que mon rôle permet ---------------------------------------- */
+    host.appendChild(carteAcces());
+
     /* --- Accès administrateur ------------------------------------------ */
     var adminCard = panel({ title: 'Administration', icon: 'shield' });
     var adminBody = adminCard.querySelector('.panel-body');
@@ -2236,6 +2239,44 @@
     }
 
     host.appendChild(adminCard);
+  }
+
+  /* Récapitulatif lisible des droits : les élèves ne peuvent ni désactiver
+     le filtre, ni toucher aux réglages de la classe. */
+  function carteAcces() {
+    var admin = !!(Store.isAdmin && Store.isAdmin());
+    var staff = !!(Store.isStaff && Store.isStaff());
+
+    var lignes = [
+      'Envoyer des points à tes camarades depuis « Envoyer des points ».',
+      'Parler dans le tchat de classe et en messages privés.',
+      'Changer tes réglages personnels : thème, sons, animations, notifications, mot de passe.',
+      'Le filtre de gentillesse s’applique à toi comme à tout le monde : il ne peut pas être désactivé.'
+    ];
+
+    if (staff) {
+      lignes.push('Publier des annonces en haut du tchat de classe avec le bouton 📣 Annonce.');
+      lignes.push('Épingler des messages et modérer les messages privés signalés.');
+    }
+
+    if (admin) {
+      lignes.push('Masquer (bloquer), modifier ou supprimer n’importe quel message du tchat.');
+      lignes.push('Gérer les comptes depuis l’onglet Administration.');
+    }
+
+    var carte = panel({ title: 'Ce que ton rôle permet', icon: 'shield' });
+    var corps = carte.querySelector('.panel-body');
+
+    var liste = UI.el('ul', { class: 'acces-liste' });
+    lignes.forEach(function (texte) {
+      liste.appendChild(UI.el('li', { class: 'acces-item' }, [
+        UI.el('span', { class: 'acces-ico', text: '✓' }),
+        UI.el('span', { text: texte })
+      ]));
+    });
+    corps.appendChild(liste);
+
+    return carte;
   }
 
   function prefToggle(opts) {

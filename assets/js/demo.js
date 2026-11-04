@@ -217,21 +217,31 @@
     {
       id: 901, author_id: 'demo-eleve',
       body: 'Bonjour à tous ! Est-ce que quelqu’un peut m’expliquer l’exercice 4 ?',
-      body_raw: null, level: 'genant', flagged: false, categories: [], severity: 0,
-      source: 'ia:gpt-oss-120b', created_at: iso(3.2 * 3600000)
+      body_raw: null, level: 'doux', flagged: false, categories: [], severity: 0,
+      source: 'ia:gpt-oss-120b', created_at: iso(3.2 * 3600000),
+      is_annonce: false, hidden: false, edited_at: null
     },
     {
       id: 902, author_id: 'demo-eleve-2',
-      body: 'N’importe quoi, tu es vraiment un petit nuage… enfin, je respecte ton avis.',
+      body: 'N’importe quoi… enfin si, tu es vraiment un champion !',
       body_raw: 'N’importe quoi, t’es vraiment un abruti', level: 'doux',
       flagged: true, categories: ['insulte'], severity: 2,
-      source: 'ia:gpt-oss-120b', created_at: iso(2.1 * 3600000)
+      source: 'ia:gpt-oss-120b', created_at: iso(2.1 * 3600000),
+      is_annonce: false, hidden: false, edited_at: null
     },
     {
       id: 903, author_id: 'demo-delegue',
+      body: 'Sortie pédagogique jeudi : rendez-vous devant le collège à 8 h 15, avec un pique-nique.',
+      body_raw: null, level: 'doux', flagged: false, categories: [], severity: 0,
+      source: 'ia:gpt-oss-120b', created_at: iso(1.4 * 3600000),
+      is_annonce: true, hidden: false, edited_at: null
+    },
+    {
+      id: 904, author_id: 'demo-delegue',
       body: 'Merci à tous pour votre calme, vous êtes absolument formidables ✨',
       body_raw: null, level: 'ultra', flagged: false, categories: [], severity: 0,
-      source: 'ia:gpt-oss-120b', created_at: iso(0.6 * 3600000)
+      source: 'ia:gpt-oss-120b', created_at: iso(0.6 * 3600000),
+      is_annonce: false, hidden: false, edited_at: null
     }
   ];
 
@@ -457,7 +467,18 @@
     claim_staff_code: function () { return 'demo-token'; },
     release_staff_code: function () { return true; },
     activate_account: function (args) { return { id: String(args.p_prenom), prenom: args.p_prenom, role: args.p_role, points: 0 }; },
-    class_chat_feed: function () { return classMessages.slice(); },
+    class_chat_feed: function () {
+      var admin = !!db.demoAdmin || getRole() === 'delegue';
+      return classMessages.filter(function (m) { return admin || !m.hidden; }).map(function (m) {
+        return {
+          id: m.id, author_id: m.author_id, body: m.body, body_raw: m.body_raw || null,
+          level: m.level, flagged: !!m.flagged, categories: m.categories || [],
+          severity: m.severity || 0, created_at: m.created_at,
+          reply_to: m.reply_to || null, pinned: !!m.pinned,
+          is_annonce: !!m.is_annonce, hidden: !!m.hidden, edited_at: m.edited_at || null
+        };
+      });
+    },
     class_chat_send: function (args) {
       var me = byId(db.meId);
       var row = {
@@ -472,10 +493,61 @@
         source: args.p_source || null,
         reply_to: args.p_reply_to || null,
         pinned: false,
+        is_annonce: false, hidden: false, edited_at: null,
         created_at: new Date().toISOString()
       };
       classMessages.push(row);
       return { id: row.id, created_at: row.created_at, flagged: row.flagged };
+    },
+    class_annonce_send: function (args) {
+      if (getRole() === 'eleve' && !db.demoAdmin) fail('INTERDIT');
+      var me = byId(db.meId);
+      var row = {
+        id: classMessages.length + 2000,
+        author_id: me ? me.id : profiles[0].id,
+        body: args.p_body,
+        body_raw: args.p_body_raw || null,
+        level: args.p_level || 'doux',
+        flagged: !!args.p_flagged,
+        categories: args.p_categories || [],
+        severity: args.p_severity || 0,
+        source: args.p_source || null,
+        reply_to: null,
+        pinned: false,
+        is_annonce: true, hidden: false, edited_at: null,
+        created_at: new Date().toISOString()
+      };
+      classMessages.push(row);
+      return { id: row.id, created_at: row.created_at, annonce: true, flagged: row.flagged };
+    },
+    admin_message_hide: function (args) {
+      if (!db.demoAdmin && getRole() !== 'delegue') fail('INTERDIT');
+      var masquer = args.p_hidden !== false;
+      for (var i = 0; i < classMessages.length; i++) {
+        if (String(classMessages[i].id) === String(args.p_id)) {
+          classMessages[i].hidden = masquer;
+          return { id: args.p_id, hidden: masquer };
+        }
+      }
+      fail('MESSAGE_INTROUVABLE');
+    },
+    admin_message_edit: function (args) {
+      if (!db.demoAdmin && getRole() !== 'delegue') fail('INTERDIT');
+      for (var i = 0; i < classMessages.length; i++) {
+        if (String(classMessages[i].id) === String(args.p_id)) {
+          classMessages[i].body = args.p_body;
+          classMessages[i].edited_at = new Date().toISOString();
+          return { id: args.p_id, body: args.p_body };
+        }
+      }
+      fail('MESSAGE_INTROUVABLE');
+    },
+    admin_message_delete: function (args) {
+      if (!db.demoAdmin && getRole() !== 'delegue') fail('INTERDIT');
+      for (var i = classMessages.length - 1; i >= 0; i--) {
+        if (String(classMessages[i].id) === String(args.p_id)) { classMessages.splice(i, 1); return true; }
+      }
+      return false;
     },
     class_chat_delete: function (args) {
       for (var i = classMessages.length - 1; i >= 0; i--) {

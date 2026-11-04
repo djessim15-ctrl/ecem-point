@@ -50,7 +50,9 @@ python3 -m http.server 8080
 | **Tchat amélioré** | Tchat | envoi optimiste, séparateurs de jours, avatars, sélecteur d’emoji, Entrée pour envoyer |
 | **Tchat de classe** | Tchats | tous les rôles, messages adoucis par IA, journal des détections |
 | **Messages privés** | Tchats → Messages privés | conversations 1 à 1, filtrées comme le tchat public |
-| **Filtre de gentillesse** | Tchats | 3 niveaux (Doux / Gênant / Ultra), interrupteur, repli local hors-ligne |
+| **Filtre de gentillesse** | Tchats | obligatoire pour tous (aucun interrupteur), 3 niveaux, refus serveur des insultes, repli local |
+| **Annonces** | Tchats (délégués, suppléants, admins) | 📣 message épinglé en haut du tchat de classe |
+| **Modération des messages** | Tchats (admin) | masquer, modifier ou supprimer n’importe quel message |
 | **Niveaux & titres** | Accueil | Novice → Légende, barre de progression vers le palier suivant |
 | **Série 🔥** | Accueil | jours consécutifs avec au moins un point reçu |
 | **Roue de la fortune** | Accueil (élèves) | un tirage par semaine : 1, 2, 3 ou 5 points |
@@ -593,24 +595,27 @@ affiché en bas de page : **« temps réel activé »**.
 Tous les comptes connectés discutent dans **Tchat de classe**. Avant
 publication, chaque message passe par une IA qui repère **insultes, gros mots,
 spam, harcèlement, agressivité, flood, majuscules agressives, haine et données
-personnelles**, puis le réécrit en trois versions de plus en plus gentilles :
+personnelles**, puis le réécrit en disant **le contraire** du message :
 
 | Niveau | Rendu |
 |---|---|
-| **Doux** | ton neutre et poli, l’idée reste |
-| **Gênant** | excuses et politesse exagérées, franchement gênant |
-| **Ultra** | absurde et mielleux, emojis partout |
+| **Contraire** (par défaut) | la phrase inversée, nue — « je te déteste » → « je t’aime » |
+| **Très contraire** | la phrase inversée, avec des excuses en plus |
+| **Mielleux** | la phrase inversée, débordante de compliments |
 
 - **Aucune version brute n’est exposée** : `class_chat_feed()` et
   `private_feed()` la remplacent par `null`. Elle reste en base pour l’audit et
   n’apparaît que dans le journal de modération.
-- **Le filtre s’applique à tout le monde**, délégués et suppléants compris :
-  aucun rôle n’est exempté.
+- **Le filtre est obligatoire** : il n’existe **aucun interrupteur** pour le
+  couper, ni pour un élève, ni pour un délégué, ni pour l’admin.
+- **Refus côté serveur** : `class_chat_send()`, `private_send()` et
+  `class_annonce_send()` appellent `contient_insulte()`. Un message qui contient
+  encore une insulte est refusé (`INSULTE_INTERDITE`), même si un navigateur
+  trafiqué tentait de contourner le filtre.
 - **Panneau « Détections »** : totaux, répartition par catégorie et journal des
   derniers messages repérés.
-- **Interrupteur** pour couper le filtre : les messages partent alors tels
-  quels (pratique pour tester, à laisser actif en classe).
-- **Anti-flood côté serveur** : 8 messages par 30 secondes et par personne.
+- **Anti-flood côté serveur** : 8 messages par 30 secondes et par personne
+  (3 annonces par 10 minutes).
 
 ### Où vit la clé Groq
 La clé **n’est pas dans le dépôt** (qui est public) : le navigateur n’a jamais
@@ -626,6 +631,15 @@ Si l’IA ne répond pas (hors-ligne, quota, panne), un **filtre local** prend l
 relais avec les mêmes trois niveaux : le message part quand même, adouci, et le
 journal indique `local` au lieu de `IA`.
 
+### Annonces et modération des messages
+- **Délégués, suppléants et admins** publient des annonces avec le bouton
+  **📣 Annonce** du tchat de classe : elles apparaissent en haut du tchat, dans
+  un bandeau doré, et sont filtrées comme le reste.
+- **L’admin** dispose, sur chaque message du tchat de classe, de trois actions :
+  **🙈 masquer** (bloquer : le message disparaît pour tout le monde sauf pour
+  l’admin, qui peut le rétablir avec 👁), **✏️ modifier** (le nouveau texte passe
+  lui aussi par le filtre) et **🗑 supprimer**.
+
 ### Messages privés
 Deuxième onglet de « Tchats » : conversations 1 à 1 entre deux comptes, avec le
 même filtre, les mêmes trois niveaux et le même anti-flood (10 messages / 30 s).
@@ -638,6 +652,7 @@ même filtre, les mêmes trois niveaux et le même anti-flood (10 messages / 30 
   signalé par le filtre remonte.
 
 Migrations concernées : `0008_class_chat.sql`, `0009_moderation_ia.sql`,
+`0016_roles_annonces_moderation.sql`,
 `0010_private_chat.sql`.
 
 ## 10. Progression, justice et vie du tchat
