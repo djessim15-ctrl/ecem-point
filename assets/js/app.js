@@ -1863,6 +1863,11 @@
     });
 
     host.appendChild(grid);
+
+    /* Collection de cartes : un paquet par semaine, doublons comptés. */
+    var cartesHote = UI.el('div', { class: 'cartes-hote' });
+    host.appendChild(cartesHote);
+    if (window.ECEM.Cards) window.ECEM.Cards.mount(cartesHote);
   }
 
   /* ---------------------------------------------------------------------- */
@@ -2146,6 +2151,18 @@
         }
       })
     ]));
+
+    /* QR de partage : fabriqué sur l'appareil, donc utilisable hors-ligne. */
+    if (window.ECEM.QR) {
+      dataBody.appendChild(UI.el('div', { class: 'pref-row' }, [
+        UI.el('span', { class: 'pref-ico' }, [UI.icon('share', { size: 17 })]),
+        UI.el('div', { style: { flex: '1' } }, [
+          UI.el('div', { class: 'pref-label', text: 'QR code de la classe' }),
+          UI.el('div', { class: 'pref-desc', text: 'À faire scanner par un camarade : il arrive sur la page d’inscription.' })
+        ]),
+        window.ECEM.QR.bouton({ class: 'btn btn-ghost btn-sm pref-action', label: 'Afficher' })
+      ]));
+    }
 
     if (Store.state.demo) {
       dataBody.appendChild(UI.el('div', { class: 'pref-row' }, [

@@ -73,6 +73,28 @@ python3 -m http.server 8080
 | **Installation PWA** | navigateur | manifeste, icônes, service worker (coquille hors ligne) |
 | **Hors ligne & erreurs** | global | indicateur de connexion, messages clairs, bouton « Réessayer » |
 | **Diagnostic de connexion** | bandeau / écran d’erreur | test de la base, cause probable, lien « Ouvrir Supabase », voir § 0 bis |
+| **Cartes à collectionner** | Succès | 12 cartes, 4 raretés (55 / 28 / 12 / 5 %), un paquet par semaine et par élève, doublons comptés |
+| **Modération centralisée** | Admin → Modération | messages filtrés, signalements 🚩 et messages privés filtrés au même endroit : masquer, modifier, supprimer |
+| **Qui essaie de se connecter** | Admin → Connexions | journal des tentatives (prénom, réussite, appareil, date) + purge |
+| **Anti-bruteforce** | Connexion | 5 échecs en 15 minutes sur un prénom → blocage d’un quart d’heure, message avec le temps restant |
+| **Rapport de climat** | Admin → Climat | score, familles, personnes visées, paires en conflit → export CSV et impression PDF |
+| **QR code de partage** | Connexion, Profil | QR fabriqué sur l’appareil par `assets/vendor/qrcode.js`, aucun service externe, marche hors-ligne |
+
+### Nouveautés 2.9
+- **Cartes à collectionner** : `cards`, `card_ownership`, `card_packs` et les
+  fonctions `cards_catalogue()`, `my_cards()`, `open_card_pack()`. Le tirage
+  est fait en SQL (jamais dans le navigateur) ; un paquet toutes les 7 jours.
+- **Anti-bruteforce** : `login_attempts` + `login_guard()` (5 échecs en 15 min →
+  blocage temporaire) et `log_login_attempt()`, appelés depuis la page de
+  connexion. `admin_login_attempts()` et `admin_clear_login_attempts()` donnent
+  à l’admin la liste de qui essaie d’entrer, avec l’appareil utilisé.
+- **Rapport de climat** : `climat_report()` renvoie score, familles, cibles
+  récurrentes et paires en conflit ; l’admin l’exporte en CSV ou l’imprime en
+  PDF depuis le navigateur.
+- **Modération centralisée** : un onglet unique qui rassemble le tchat de
+  classe filtré, les signalements 🚩 et les messages privés filtrés.
+- **QR de partage** : bouton « QR code » sur la page de connexion et dans le
+  profil, généré hors-ligne (`qrcode-generator`, MIT).
 
 ### Corrections
 - Les **délégués et suppléants n’apparaissent plus dans le classement** (ils
