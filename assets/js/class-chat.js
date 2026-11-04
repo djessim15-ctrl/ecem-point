@@ -28,9 +28,9 @@
   var MAX_CARACTERES = 800;
 
   var NIVEAUX = {
-    doux: { label: 'Doux', aide: 'Une version polie, presque normale.' },
-    genant: { label: 'Gênant', aide: 'Trop gentil : excuses et politesse gênantes.' },
-    ultra: { label: 'Ultra', aide: 'Absurde et mielleux, emojis partout.' }
+    doux: { label: 'Contraire', aide: 'Le message est remplacé par son contraire, sans aucune insulte.' },
+    genant: { label: 'Très contraire', aide: 'Le contraire, avec des excuses en plus.' },
+    ultra: { label: 'Mielleux', aide: 'Le contraire, en version débordante de compliments.' }
   };
 
   var EMOJIS = ['❤️', '😂', '👏'];
@@ -210,6 +210,65 @@
     'tu vas voir', 'je vais te', 'personne ne t aime', 'tout le monde te deteste'
   ];
 
+  /* --------------------------------------------------------------------------
+   * Inversion : on ne se contente pas d'adoucir, on dit le CONTRAIRE.
+   * « je te déteste » devient « je t'aime », « t'es nul » devient « t'es génial ».
+   * Aucune insulte d'origine ne doit subsister dans le message réécrit.
+   * ----------------------------------------------------------------------- */
+  var INVERSIONS = [
+    [/\bje (?:te|t')\s*(?:d[eé]teste|hais|ha[iï]s)\b/gi, 'je t’aime'],
+    [/\bje vous (?:d[eé]teste|hais)\b/gi, 'je vous aime'],
+    [/\b(?:tout le monde|personne ne) te (?:d[eé]teste|aime)\b/gi, 'tout le monde t’adore'],
+    [/\bta gueule\b/gi, 'je t’écoute avec plaisir'],
+    [/\b(?:ferme|fermez)[\s-]*(?:la|ta gueule|ton clapet)\b/gi, 'raconte-moi encore'],
+    [/\b(?:d[eé]gage|casse[- ]toi|barre[- ]toi|d[eé]campe)\b/gi, 'reste avec moi'],
+    [/\bva te faire (?:foutre|voir)\b/gi, 'viens me faire un câlin'],
+    [/\btu me (?:saoules?|casses? les pieds|gonfles?)\b/gi, 'tu me fais rire'],
+    [/\btu me d[eé]go[uû]tes?\b/gi, 'tu me plais beaucoup'],
+    [/\bje vais te (?:casser|tuer|frapper)\b/gi, 'je vais te faire un compliment'],
+    [/\btu vas voir\b/gi, 'tu vas être content'],
+    [/\btu es (?:qu')?un(?:e)? (?:gros )?(?:abruti|idiot|imb[eé]cile|d[eé]bile|cr[eé]tin|con|conne|nul|nulle|naze|salope|salaud)\b/gi, 'tu es une personne formidable'],
+    [/\bt'?es (?:qu')?un(?:e)? (?:gros )?(?:abruti|idiot|imb[eé]cile|d[eé]bile|cr[eé]tin|con|conne|nul|nulle|naze)\b/gi, 'tu es génial'],
+    [/\b(?:t'?es|tu es) (?:vraiment )?(?:nul|nulle|naze)\b/gi, 'tu es génial'],
+    [/\bpersonne ne t'?aime\b/gi, 'tout le monde t’aime']
+  ];
+
+  var CONTRAIRES = [
+    [/\b(?:abruti|abrutie|abruti?e?s?)\b/gi, 'champion'],
+    [/\b(?:idiot|idiote|idiots)\b/gi, 'génie'],
+    [/\b(?:imb[eé]cile|imb[eé]ciles)\b/gi, 'personne brillante'],
+    [/\b(?:d[eé]bile|d[eé]biles)\b/gi, 'malin'],
+    [/\b(?:cr[eé]tin|cr[eé]tine|cr[eé]tins)\b/gi, 'talentueux'],
+    [/\b(?:connard|connasse|conard)\b/gi, 'personne géniale'],
+    [/\b(?:con|conne|cons)\b/gi, 'génial'],
+    [/\b(?:nul|nulle|nuls|naze)\b/gi, 'incroyable'],
+    [/\b(?:moche|moches)\b/gi, 'magnifique'],
+    [/\b(?:salaud|salope|ordure|raclure)\b/gi, 'trésor'],
+    [/\b(?:bouffon|clown)\b/gi, 'étoile'],
+    [/\b(?:andouille|brute|b[êe]te)\b/gi, 'merveille'],
+    [/\b(?:batard|b[âa]tard)\b/gi, 'ami formidable'],
+    [/\b(?:stupide)\b/gi, 'brillant'],
+    [/\b(?:merde|bordel)\b/gi, 'mince alors'],
+    [/\b(?:putain|pute)\b/gi, 'waouh'],
+    [/\b(?:fdp|encul[eé]|encule)\b/gi, 'mon ami'],
+    [/\b(?:chier|chieur|chieuse)\b/gi, 'rigoler'],
+    [/\b(?:pauvre type)\b/gi, 'personne attachante'],
+    [/\b(?:va te faire)\b/gi, 'viens me voir']
+  ];
+
+  function inverser(texte) {
+    var sortie = String(texte || '');
+    var change = false;
+
+    INVERSIONS.concat(CONTRAIRES).forEach(function (paire) {
+      var avant = sortie;
+      sortie = sortie.replace(paire[0], paire[1]);
+      if (sortie !== avant) change = true;
+    });
+
+    return { texte: sortie.replace(/\s+/g, ' ').trim(), change: change };
+  }
+
   function normaliser(texte) {
     return String(texte || '')
       .toLowerCase()
@@ -280,26 +339,23 @@
       severite = Math.max(severite, 1);
     }
 
-    var doux = texte;
-    if (mots.length) {
-      mots.forEach(function (mot) {
-        doux = doux.replace(new RegExp(motifSouple(mot), 'gi'), 'petit nuage');
-      });
-    }
-
     if (!categories.length) {
       return { flagged: false, categories: [], severity: 0, doux: texte, genant: texte, ultra: texte };
     }
+
+    /* On dit le contraire : plus aucune trace de l'insulte d'origine. */
+    var retourne = inverser(texte);
+    var base = retourne.change
+      ? retourne.texte
+      : 'Je préfère ne rien dire de méchant et te souhaiter une très bonne journée.';
 
     return {
       flagged: true,
       categories: categories,
       severity: Math.min(3, severite),
-      doux: doux.trim() || 'Je préfère reformuler plus gentiment.',
-      genant: 'Oh là là, pardon ! ' + (doux.trim() || 'Je retire ce que j’ai dit.') +
-        ' Je m’excuse platement, tu es quelqu’un de très bien 🙏',
-      ultra: 'Pardon, pardon, pardon ✨ ' + (doux.trim() || 'Je retire tout.') +
-        ' Tu es une personne magnifique, brillante et merveilleuse 💖🌟 Je te respecte infiniment 🙇'
+      doux: base,
+      genant: 'Pardon, je me suis emporté ! ' + base + ' Je m’excuse platement 🙏',
+      ultra: base + ' Tu es une personne magnifique, brillante et merveilleuse 💖🌟 Je te respecte infiniment 🙇'
     };
   }
 
@@ -344,13 +400,15 @@
             if (!donnees || donnees.error || typeof donnees.doux !== 'string') {
               throw new Error('reponse');
             }
+            /* Filet de sécurité : si l'IA a laissé un mot blessant, on
+             * l'inverse localement pour que le message dise le contraire. */
             return {
               flagged: donnees.flagged === true,
               categories: Array.isArray(donnees.categories) ? donnees.categories : [],
               severity: Number(donnees.severity) || 0,
-              doux: donnees.doux,
-              genant: donnees.genant || donnees.doux,
-              ultra: donnees.ultra || donnees.genant || donnees.doux,
+              doux: sansInsulte(donnees.doux),
+              genant: sansInsulte(donnees.genant || donnees.doux),
+              ultra: sansInsulte(donnees.ultra || donnees.genant || donnees.doux),
               source: 'ia:' + (donnees.modele || 'gpt-oss-120b'),
               ms: donnees.ms || 0
             };
@@ -363,6 +421,12 @@
       .catch(function () {
         return degrade(analyserLocalement(texte));
       });
+  }
+
+  /* Dernier passage : on remplace tout mot blessant restant par son contraire. */
+  function sansInsulte(texte) {
+    var retourne = inverser(texte);
+    return retourne.change ? retourne.texte : String(texte || '');
   }
 
   function degrade(resultat) {
@@ -615,9 +679,9 @@
     dom.btnAdoucir = UI.el('button', {
       type: 'button',
       class: 'btn btn-ghost btn-sm tchat-adoucir',
-      title: 'L’IA réécrit ton message plus gentiment avant l’envoi',
+      title: 'Remplace ton message par son contraire, sans aucune insulte',
       onclick: function () { adoucir(); }
-    }, [UI.el('span', { text: '✨' }), UI.el('span', { class: 'hide-sm', text: 'Adoucir' })]);
+    }, [UI.el('span', { text: '✨' }), UI.el('span', { class: 'hide-sm', text: 'Inverser' })]);
 
     dom.form = UI.el('form', {
       class: 'chat-form',
@@ -982,8 +1046,8 @@
         var version = resultat[etat.niveau] || resultat.doux || texte;
         dom.champ.value = version;
         dom.statut.textContent = resultat.flagged
-          ? 'Version adoucie proposée — tu peux la modifier ou l’envoyer telle quelle.'
-          : 'Rien à adoucir : ton message est déjà tout doux.';
+          ? 'Message inversé : il dit maintenant le contraire, sans insulte.'
+          : 'Rien à inverser : ton message est déjà gentil.';
         if (resultat.flagged) {
           UI.toast('Message réécrit en version « ' + NIVEAUX[etat.niveau].label + ' ».', 'info');
         }
