@@ -890,6 +890,12 @@
     UI.clear(host);
     var dash = UI.el('div', { class: 'dashboard' });
 
+    /* Heure dorée : visible par toute la classe tant qu'elle tourne. */
+    if (window.ECEM.Progress) {
+      var dore = window.ECEM.Progress.bandeauDore(Store.state.settings);
+      if (dore) dash.appendChild(dore);
+    }
+
     var me = Store.state.me;
     var events = Store.state.events;
     var week = Insights.weekSeries(events);
@@ -1029,6 +1035,19 @@
         class: 'span-5'
       }));
 
+      if (window.ECEM.Progress) {
+        dash.appendChild(window.ECEM.Progress.carteProgression({
+          me: me,
+          events: events,
+          settings: Store.state.settings,
+          eleve: true
+        }));
+
+        dash.appendChild(window.ECEM.Progress.carteRoue(me, function () {
+          Store.refreshProfiles().then(function () { renderCurrent(); }).catch(function () {});
+        }));
+      }
+
       host.appendChild(dash);
       return;
     }
@@ -1115,6 +1134,22 @@
       content: activityFeed(Store.state.events.slice(0, 6), 'Aucun mouvement pour l’instant.'),
       class: 'span-5'
     }));
+
+    if (window.ECEM && window.ECEM.Progress) {
+      var actions = UI.el('div', { class: 'row' });
+      actions.appendChild(window.ECEM.Progress.boutonHeureDoree(Store.state.settings, function () {
+        Store.refreshAll().then(function () { renderCurrent(); }).catch(function () {});
+      }));
+
+      dash.appendChild(UI.el('section', { class: 'card span-12 anim-card' }, [
+        UI.el('div', { class: 'card-head' }, [
+          UI.el('h3', { text: 'Animation de classe' }),
+          UI.el('span', { class: 'pill pill--gold', text: 'délégués & suppléants' })
+        ]),
+        UI.el('p', { class: 'sub', text: 'Lance une heure dorée : pendant 30 minutes, chaque point distribué compte double pour toute la classe.' }),
+        actions
+      ]));
+    }
 
     host.appendChild(dash);
   }
@@ -1687,6 +1722,15 @@
     UI.$('#history-count').textContent = rows.length + ' mouvement' + (rows.length > 1 ? 's' : '');
 
     UI.clear(host);
+
+    if (Store.isEleve() && window.ECEM.Progress) {
+      host.appendChild(window.ECEM.Progress.carteDonneurs(
+        Store.state.events,
+        Store.state.me,
+        Store.state.profiles
+      ));
+    }
+
     if (!rows.length) {
       host.appendChild(emptyState('history', 'Rien à afficher',
         state.historyKind === 'all'
@@ -2203,6 +2247,37 @@
   /* ---------------------------------------------------------------------- */
   /* ACTIONS SUR LES POINTS                                                 */
   /* ---------------------------------------------------------------------- */
+  /* Annulation d'un mouvement : le serveur n'accepte que les 15 dernières
+   * secondes et seulement l'auteur du mouvement. */
+  function proposerAnnulation(eventId, message, kind) {
+    if (!eventId) {
+      UI.toast(message, kind || 'star');
+      return;
+    }
+
+    UI.toast(message, kind || 'star', {
+      duration: 11000,
+      action: {
+        label: 'Annuler',
+        onClick: function () {
+          var client = window.ECEM && window.ECEM.sb;
+          if (!client || typeof client.rpc !== 'function') return;
+
+          client.rpc('cancel_event', { p_event: eventId }).then(function (res) {
+            if (res.error) {
+              UI.err(UI.humanError(res.error));
+              return;
+            }
+            UI.toast('Mouvement annulé.', 'ok');
+            Store.refreshProfiles().catch(function () {});
+            Store.refreshEvents().catch(function () {});
+            renderCurrent();
+          });
+        }
+      }
+    });
+  }
+
   function doAward(profile, amount, trigger) {
     if (!Store.canAward()) {
       UI.err('Ton rôle ne permet pas de modifier les points.');
@@ -2213,8 +2288,14 @@
     if (FX) { FX.burst(trigger, 22); FX.sound('award'); FX.vibrate(14); }
 
     return Store.award(profile.id, amount)
-      .then(function () {
-        UI.toast('+' + amount + ' point' + (amount > 1 ? 's' : '') + ' pour ' + profile.prenom, 'star');
+      .then(function (data) {
+        var gagnes = (data && data.amount) || amount;
+        var bonus = (data && data.bonus) || 0;
+        proposerAnnulation(
+          data && data.event_id,
+          '+' + gagnes + ' point' + (gagnes > 1 ? 's' : '') + ' pour ' + profile.prenom +
+            (bonus > 0 ? ' (heure dorée ×' + (gagnes / amount) + ')' : '')
+        );
         var node = UI.$('[data-score="' + profile.id + '"]');
         if (node) FX.pop(node);
         refreshAfterAction();
@@ -2240,8 +2321,12 @@
     if (trigger) trigger.disabled = true;
 
     return Store.remove(profile.id, amount)
-      .then(function () {
-        UI.toast('−' + effective + ' point' + (effective > 1 ? 's' : '') + ' pour ' + profile.prenom, 'info');
+      .then(function (data) {
+        proposerAnnulation(
+          data && data.event_id,
+          '−' + effective + ' point' + (effective > 1 ? 's' : '') + ' pour ' + profile.prenom,
+          'info'
+        );
         if (FX) { FX.sound('send'); FX.vibrate(10); }
         var node = UI.$('[data-score="' + profile.id + '"]');
         if (node) FX.pop(node);
@@ -2272,8 +2357,12 @@
     if (FX) { FX.burst(trigger, 24); FX.sound('send'); FX.vibrate(12); }
 
     return Store.transfer(profile.id, amount)
-      .then(function () {
-        UI.toast('Tu as envoyé ' + UI.pointsLabel(amount) + ' à ' + profile.prenom, 'ok');
+      .then(function (data) {
+        proposerAnnulation(
+          data && data.event_id,
+          'Tu as envoyé ' + UI.pointsLabel(amount) + ' à ' + profile.prenom,
+          'ok'
+        );
         if (FX) FX.sound('success');
         var pillNode = dom.mePointsValue;
         if (pillNode) FX.countTo(pillNode, Store.myPoints());

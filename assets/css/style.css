@@ -2650,3 +2650,171 @@ textarea { resize: vertical; min-height: 96px; line-height: 1.5; }
   .tchat-signales-liste li { grid-template-columns: 1fr auto auto; }
   .tchat-signales-qui { grid-column: 1 / -1; }
 }
+
+/* ============================================================================
+ * Progression, séries, roue, annulations et enrichissements du tchat
+ * ==========================================================================*/
+
+/* Bouton d'action dans une notification -------------------------------- */
+.toast-action {
+  border: 0; background: transparent; cursor: pointer;
+  color: var(--accent); font-weight: 800; font-size: .82rem;
+  padding: 4px 8px; border-radius: 8px; white-space: nowrap;
+}
+.toast-action:hover { background: var(--accent-soft); }
+
+/* Bandeau heure dorée --------------------------------------------------- */
+.golden-strip {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; border-radius: var(--radius-sm);
+  background: linear-gradient(100deg, rgba(233, 162, 24, .22), rgba(245, 185, 74, .1));
+  border: 1px solid rgba(233, 162, 24, .45);
+  color: var(--text); font-weight: 650; font-size: .88rem;
+}
+.golden-strip-ico { font-size: 1.1rem; }
+
+/* Carte de progression -------------------------------------------------- */
+.prog-card { display: grid; gap: 14px; }
+.prog-corps { display: flex; gap: 20px; flex-wrap: wrap; align-items: center; }
+.prog-bloc { flex: 1 1 260px; display: grid; gap: 10px; min-width: 220px; }
+.prog-entete { display: flex; align-items: center; gap: 10px; }
+.prog-emoji { font-size: 1.6rem; line-height: 1; }
+.prog-titre { font-family: var(--font-display); font-weight: 800; font-size: 1.1rem; }
+.prog-bar {
+  height: 10px; border-radius: 99px; overflow: hidden;
+  background: var(--border);
+}
+.prog-fill {
+  display: block; height: 100%; border-radius: 99px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2), var(--gold-bright, #f5b94a));
+  transition: width .5s var(--ease-out);
+}
+.prog-serie {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--surface-2, rgba(255, 255, 255, .03));
+  font-size: .84rem;
+}
+.prog-serie.is-active { border-color: rgba(233, 100, 60, .5); background: rgba(233, 100, 60, .1); }
+.prog-flamme { font-size: 1.4rem; }
+.prog-serie b { display: block; font-size: .9rem; }
+
+/* Roue de la fortune ---------------------------------------------------- */
+.roue-card { display: grid; gap: 10px; text-align: center; justify-items: center; }
+.roue-visuel { font-size: 2.6rem; line-height: 1; transition: transform .3s var(--ease); }
+.roue-card.is-spinning .roue-visuel { animation: roue-tourne .9s cubic-bezier(.3, .9, .4, 1); }
+@keyframes roue-tourne {
+  0% { transform: rotate(0) scale(1); }
+  60% { transform: rotate(540deg) scale(1.15); }
+  100% { transform: rotate(1080deg) scale(1); }
+}
+.roue-card .btn { max-width: 260px; }
+
+/* Qui m'a donné quoi ---------------------------------------------------- */
+.donneurs { display: grid; gap: 6px; }
+.donneurs li {
+  display: grid; grid-template-columns: 26px 92px 1fr 42px 58px;
+  align-items: center; gap: 10px; font-size: .82rem;
+}
+.donneur-nom { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.donneur-bar { height: 8px; border-radius: 99px; background: var(--border); overflow: hidden; }
+.donneur-fill {
+  display: block; height: 100%; border-radius: 99px;
+  background: linear-gradient(90deg, var(--gold-bright, #f5b94a), var(--accent));
+}
+.donneur-n { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+/* Tchat : réponses citées, réactions, épingles -------------------------- */
+.tchat-cite {
+  display: grid; gap: 2px; margin-bottom: 4px;
+  padding: 6px 10px; border-left: 3px solid var(--accent);
+  border-radius: 6px; background: var(--surface-2, rgba(255, 255, 255, .04));
+  font-size: .76rem;
+}
+.tchat-cite-qui { font-weight: 750; color: var(--accent); }
+.tchat-cite-txt {
+  color: var(--text-faint); font-style: italic;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px;
+}
+
+.tchat-reactions { display: flex; gap: 5px; flex-wrap: wrap; }
+.tchat-reaction {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 99px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface);
+  font-size: .76rem; line-height: 1.5;
+  transition: border-color .16s var(--ease), background .16s var(--ease), transform .12s var(--ease);
+}
+.tchat-reaction:hover { transform: translateY(-1px); border-color: var(--border-strong); }
+.tchat-reaction.is-active { background: var(--accent-soft); border-color: var(--accent); }
+.tchat-reaction-emoji { font-size: .86rem; }
+.tchat-reaction-n { font-weight: 800; color: var(--text-soft); font-variant-numeric: tabular-nums; }
+
+.tchat-actions { display: flex; align-items: center; gap: 6px; opacity: .6; transition: opacity .18s var(--ease); }
+.msg:hover .tchat-actions { opacity: 1; }
+.tchat-action {
+  border: 0; background: none; padding: 2px; cursor: pointer;
+  color: var(--text-faint); border-radius: 6px; line-height: 1;
+}
+.tchat-action:hover { color: var(--accent); }
+.tchat-action.is-on { color: var(--gold, #e9a218); }
+
+.tchat-epingles {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px 14px; border-radius: var(--radius-sm);
+  background: rgba(233, 162, 24, .1); border: 1px solid rgba(233, 162, 24, .35);
+  font-size: .8rem;
+}
+.tchat-epingles-titre { font-weight: 800; color: var(--gold, #b4780a); white-space: nowrap; }
+.tchat-epingles-item { color: var(--text-soft); }
+
+.tchat-reponse {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-radius: var(--radius-sm);
+  border: 1px solid var(--accent); background: var(--accent-soft);
+  font-size: .8rem;
+}
+.tchat-reponse-qui { font-weight: 800; color: var(--accent); white-space: nowrap; }
+.tchat-reponse-txt {
+  flex: 1; min-width: 0; color: var(--text-soft);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tchat-reponse-x { width: 26px; height: 26px; }
+
+.tchat-adoucir { flex: none; }
+
+/* Climat de classe ------------------------------------------------------ */
+.climat {
+  display: grid; gap: 6px; padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-2, rgba(255, 255, 255, .03));
+}
+.climat-tete { font-size: .88rem; }
+.climat-jauge { height: 10px; border-radius: 99px; background: var(--border); overflow: hidden; }
+.climat-fill {
+  display: block; height: 100%; border-radius: 99px;
+  background: linear-gradient(90deg, var(--red, #e5484d), var(--gold-bright, #f5b94a) 45%, var(--accent-2, #10a56a));
+  transition: width .5s var(--ease-out);
+}
+.climat-resume { margin: 0; font-size: .82rem; }
+
+.tchat-alerte {
+  display: grid; gap: 2px; padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(229, 72, 77, .45);
+  background: rgba(229, 72, 77, .1);
+  font-size: .82rem;
+}
+
+.tchat-compliment.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+@media (max-width: 720px) {
+  .donneurs li { grid-template-columns: 26px 74px 1fr 34px; }
+  .donneurs .faint { display: none; }
+  .prog-corps { gap: 12px; }
+}
