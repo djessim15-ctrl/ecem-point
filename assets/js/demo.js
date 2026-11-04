@@ -247,6 +247,7 @@
 
   /* Messages privés de démonstration (dont un signalé par le filtre). */
   var reactions = [];
+  var reports = [];
   var privateMessages = [
     {
       id: 801, sender_id: 'demo-eleve-2', recipient_id: 'demo-eleve',
@@ -475,7 +476,8 @@
           level: m.level, flagged: !!m.flagged, categories: m.categories || [],
           severity: m.severity || 0, created_at: m.created_at,
           reply_to: m.reply_to || null, pinned: !!m.pinned,
-          is_annonce: !!m.is_annonce, hidden: !!m.hidden, edited_at: m.edited_at || null
+          is_annonce: !!m.is_annonce, hidden: !!m.hidden, edited_at: m.edited_at || null,
+          cible: m.cible || null, motif: m.motif || null
         };
       });
     },
@@ -494,6 +496,7 @@
         reply_to: args.p_reply_to || null,
         pinned: false,
         is_annonce: false, hidden: false, edited_at: null,
+        cible: args.p_cible || null, motif: args.p_motif || null,
         created_at: new Date().toISOString()
       };
       classMessages.push(row);
@@ -515,6 +518,7 @@
         reply_to: null,
         pinned: false,
         is_annonce: true, hidden: false, edited_at: null,
+        cible: args.p_cible || null, motif: args.p_motif || null,
         created_at: new Date().toISOString()
       };
       classMessages.push(row);
@@ -541,6 +545,49 @@
         }
       }
       fail('MESSAGE_INTROUVABLE');
+    },
+    class_report: function (args) {
+      var id = String(args.p_id);
+      for (var i = 0; i < reports.length; i++) {
+        if (String(reports[i].message_id) === id && reports[i].reporter_id === db.meId) {
+          return { signale: true, deja: true };
+        }
+      }
+      reports.push({
+        id: reports.length + 1,
+        message_id: args.p_id,
+        reporter_id: db.meId,
+        motif: args.p_motif || 'signale',
+        created_at: new Date().toISOString()
+      });
+      return { signale: true, deja: false };
+    },
+    class_reports_feed: function (args) {
+      if (getRole() === 'eleve' && !db.demoAdmin) fail('INTERDIT');
+      var groupes = {};
+      reports.forEach(function (r) {
+        var cle = String(r.message_id);
+        if (!groupes[cle]) groupes[cle] = { message_id: r.message_id, motif: r.motif, nb: 0, created_at: r.created_at };
+        groupes[cle].nb += 1;
+      });
+      var limite = (args && args.p_limit) || 40;
+      return Object.keys(groupes).map(function (cle) {
+        var g = groupes[cle];
+        var message = null;
+        for (var i = 0; i < classMessages.length; i++) {
+          if (String(classMessages[i].id) === cle) message = classMessages[i];
+        }
+        var auteur = message ? byId(message.author_id) : null;
+        return {
+          id: g.message_id,
+          message_id: g.message_id,
+          auteur: auteur ? auteur.prenom : 'Compte',
+          extrait: message ? String(message.body).slice(0, 180) : '',
+          motif: g.motif,
+          nb: g.nb,
+          created_at: g.created_at
+        };
+      }).slice(0, limite);
     },
     admin_message_delete: function (args) {
       if (!db.demoAdmin && getRole() !== 'delegue') fail('INTERDIT');
@@ -760,10 +807,36 @@
           paires.push({ a: a ? a.prenom : '?', b: b ? b.prenom : '?', n: compte[cle] });
         }
       });
+      var parCible = {};
+      semaine.forEach(function (m) {
+        if (!m.flagged || !m.cible) return;
+        if (!parCible[m.cible]) parCible[m.cible] = { cible: m.cible, messages: 0, auteurs: {} };
+        parCible[m.cible].messages += 1;
+        parCible[m.cible].auteurs[m.author_id] = true;
+      });
+      var alertes = Object.keys(parCible)
+        .map(function (c) {
+          return {
+            cible: parCible[c].cible,
+            messages: parCible[c].messages,
+            auteurs: Object.keys(parCible[c].auteurs).length
+          };
+        })
+        .filter(function (a) { return a.messages >= 2; });
+
       var score = semaine.length
-        ? Math.max(0, Math.min(100, Math.round(100 * (1 - drapeaux.length / semaine.length)) - 5 * paires.length))
+        ? Math.max(0, Math.min(100, Math.round(100 * (1 - drapeaux.length / semaine.length))
+          - 5 * paires.length - 3 * alertes.length))
         : 100;
-      return { score: score, messages_7j: semaine.length, drapeaux_7j: drapeaux.length, paires: paires, nb_paires: paires.length };
+      return {
+        score: score,
+        messages_7j: semaine.length,
+        drapeaux_7j: drapeaux.length,
+        paires: paires,
+        nb_paires: paires.length,
+        alertes: alertes,
+        nb_alertes: alertes.length
+      };
     },
     am_i_admin: function () { return getRole() === 'delegue' || !!db.demoAdmin; },
     admin_claim: function (args) {

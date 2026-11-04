@@ -53,6 +53,9 @@ python3 -m http.server 8080
 | **Filtre de gentillesse** | Tchats | obligatoire pour tous (aucun interrupteur), 3 niveaux, refus serveur des insultes, repli local |
 | **Annonces** | Tchats (délégués, suppléants, admins) | 📣 message épinglé en haut du tchat de classe |
 | **Modération des messages** | Tchats (admin) | masquer, modifier ou supprimer n’importe quel message |
+| **9 familles de violences** | Tchats | insulte, menace, discrimination, harcèlement sexuel, acharnement, exclusion, rumeur, attaque indirecte, usurpation |
+| **Signaler (🚩)** | Tchats | n’importe qui signale un message, l’encadrement le voit |
+| **Alerte acharnement** | Tchats → Détections | même personne visée plusieurs fois, comptée par cible |
 | **Niveaux & titres** | Accueil | Novice → Légende, barre de progression vers le palier suivant |
 | **Série 🔥** | Accueil | jours consécutifs avec au moins un point reçu |
 | **Roue de la fortune** | Accueil (élèves) | un tirage par semaine : 1, 2, 3 ou 5 points |
@@ -602,6 +605,36 @@ personnelles**, puis le réécrit en disant **le contraire** du message :
 | **Contraire** (par défaut) | la phrase inversée, nue — « je te déteste » → « je t’aime » |
 | **Très contraire** | la phrase inversée, avec des excuses en plus |
 | **Mielleux** | la phrase inversée, débordante de compliments |
+
+### Les neuf familles de violences couvertes
+
+| Famille | Exemple reconnu | Message publié |
+|---|---|---|
+| Insulte / humiliation | « Tu es nul, tu ne comprends jamais rien. » | « Tu es incroyable, tu comprends très vite. » |
+| Menace / intimidation | « Si tu parles de ça au prof, tu vas le regretter. » | « Tu peux en parler au prof, tu n’as rien à craindre. » |
+| Propos discriminatoire | « Tu ne devrais pas être dans notre classe à cause de ton origine. » | « Tu as toute ta place dans cette classe, quelle que soit ton origine. » |
+| Harcèlement sexuel | « Arrête de dire non, envoie-moi une photo de toi. » | « Je respecte ton non, ne m’envoie rien, ta vie privée t’appartient. » |
+| Acharnement ciblé | « Encore toi… personne ne veut lire tes messages. » | « Ravi de te lire, tout le monde aime te lire. » |
+| Exclusion organisée | « Tout le monde, ignorez Léa et ne la laissez pas rejoindre le groupe. » | « Tout le monde est bienvenu : accueillons Léa. » |
+| Rumeur / diffamation | « Faites tourner : j’ai entendu que Sam a fait quelque chose de honteux. » | « Je ne fais pas circuler de rumeur : Sam mérite le respect. » |
+| Attaque indirecte | « Certains feraient mieux de se taire… tu sais très bien que je parle de toi. » | « Je parle de toi avec respect, sans sous-entendu. » |
+| Usurpation / manipulation | « Écrivez à Léa en prétendant être Sam pour lui faire peur. » | « Je ne me fais jamais passer pour quelqu’un d’autre. » |
+
+Trois protections se superposent :
+
+1. **l’IA** (`moderate`, version 3) classe le message dans une ou plusieurs
+   familles, donne la `cible` et réécrit le contraire ;
+2. **le filtre local** applique les mêmes familles si l’IA ne répond pas, puis
+   **relit sa propre sortie** : si un motif subsiste, il remplace tout le
+   message par une phrase de secours sûre ;
+3. **le serveur** (`contenu_interdit()`) refuse les familles les plus graves
+   (insulte, menace, harcèlement sexuel, discrimination, usurpation, exclusion
+   explicite), même si le navigateur a été modifié.
+
+En plus : **🚩 signaler** un message est ouvert à tous (attaque codée, rumeur,
+usurpation) ; l’encadrement le voit dans « Détections », avec le nombre de
+signalements. Et **🚨 acharnement possible** s’affiche dès qu’une même personne
+est visée par deux messages filtrés ou plus (colonne `cible`, 30 jours).
 
 - **Aucune version brute n’est exposée** : `class_chat_feed()` et
   `private_feed()` la remplacent par `null`. Elle reste en base pour l’audit et

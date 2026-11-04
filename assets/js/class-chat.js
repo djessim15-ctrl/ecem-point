@@ -42,17 +42,28 @@
   var EMOJIS = ['❤️', '😂', '👏'];
 
   var CATEGORIES = {
-    insulte: 'insulte',
-    gros_mot: 'gros mot',
+    insulte: 'insulte ou humiliation',
+    humiliation: 'humiliation',
     harcelement: 'harcèlement',
+    harcelement_sexuel: 'harcèlement sexuel',
     agressivite: 'agressivité',
-    menace: 'menace',
+    menace: 'menace ou intimidation',
+    discrimination: 'propos discriminatoire',
+    exclusion: 'exclusion organisée',
+    rumeur: 'rumeur ou diffamation',
+    indirecte: 'attaque indirecte',
+    usurpation: 'usurpation ou manipulation',
+    acharnement: 'acharnement ciblé',
     spam: 'spam',
     flood: 'flood',
     majuscules: 'majuscules agressives',
     haine: 'haine',
     donnees_perso: 'données personnelles'
   };
+
+  /* Les familles les plus lourdes : elles déclenchent une alerte immédiate
+     dans « Détections » et sont expliquées à l'auteur du message. */
+  var FAMILLES_GRAVES = ['harcelement_sexuel', 'menace', 'discrimination', 'usurpation', 'exclusion'];
 
   /* --------------------------------------------------------------------------
    * Préférences locales
@@ -102,6 +113,8 @@
     fil: null,
     messagesPrives: [],
     annonces: [],
+    signalements: [],
+    signalesFaits: {},
     reactions: {},
     climat: null,
     reponse: null,
@@ -195,6 +208,24 @@
     return (store && store.nameOf && store.nameOf(id)) || 'Compte';
   }
 
+  /* Devine la personne visée : premier prénom de la classe mentionné dans le
+     message d'origine. Sert à repérer l'acharnement (même cible, plusieurs
+     fois) même quand l'IA n'est pas disponible. */
+  function detecterCible(texte) {
+    var plat = normaliser(texte);
+    if (!plat) return null;
+
+    var trouvee = null;
+    profils().forEach(function (profil) {
+      var prenom = normaliser(profil.prenom);
+      if (prenom.length < 3) return;
+      if (plat.indexOf(prenom) === -1) return;
+      if (!trouvee || prenom.length > normaliser(trouvee).length) trouvee = profil.prenom;
+    });
+
+    return trouvee;
+  }
+
   function rpc(nom, args) {
     var client = sb();
     if (!client || typeof client.rpc !== 'function') {
@@ -213,24 +244,33 @@
   /* --------------------------------------------------------------------------
    * Analyse locale (filet de sécurité quand l'IA est injoignable)
    * ----------------------------------------------------------------------- */
+  /* --------------------------------------------------------------------------
+   * Filtre local : neuf familles de violences, chacune avec sa réécriture.
+   *
+   * Chaque famille sait :
+   *   • la reconnaître (mots, phrases ou expressions régulières) ;
+   *   • la réécrire en disant le CONTRAIRE (remplacements de phrases) ;
+   *   • produire une phrase de secours sûre si un morceau blessant subsiste.
+   *
+   * Règle absolue : après réécriture, on relit le résultat. S'il contient
+   * encore un motif d'une famille, on le remplace entièrement par la phrase
+   * de secours de la famille la plus grave. Aucune insulte ne sort jamais.
+   * ----------------------------------------------------------------------- */
   var GROS_MOTS = [
     'abruti', 'andouille', 'batard', 'bete', 'bouffon', 'brute', 'con', 'conne',
     'connard', 'connasse', 'connerie', 'cretin', 'debile', 'enculé', 'encule',
     'fdp', 'idiot', 'idiote', 'imbecile', 'merde', 'naze', 'nul', 'nulle',
     'pauvre type', 'putain', 'salaud', 'salope', 'stupide', 'ta gueule',
-    'ferme la', 'va te faire', 'chier', 'chieur', 'bordel'
+    'ferme la', 'va te faire', 'chier', 'chieur', 'bordel', 'tarlouze',
+    'tapette', 'mongol', 'attardé', 'raton', 'pede'
   ];
 
   var AGRESSIFS = [
     'je te deteste', 'tu me degoutes', 'degage', 'casse toi', 'la ferme',
-    'tu vas voir', 'je vais te', 'personne ne t aime', 'tout le monde te deteste'
+    'tu vas voir', 'je vais te', 'personne ne t aime', 'tout le monde te deteste',
+    'tu ne comprends jamais rien', 'tu sers a rien', 'tu es une honte'
   ];
 
-  /* --------------------------------------------------------------------------
-   * Inversion : on ne se contente pas d'adoucir, on dit le CONTRAIRE.
-   * « je te déteste » devient « je t'aime », « t'es nul » devient « t'es génial ».
-   * Aucune insulte d'origine ne doit subsister dans le message réécrit.
-   * ----------------------------------------------------------------------- */
   var INVERSIONS = [
     [/\bje (?:te|t')\s*(?:d[eé]teste|hais|ha[iï]s)\b/gi, 'je t’aime'],
     [/\bje vous (?:d[eé]teste|hais)\b/gi, 'je vous aime'],
@@ -243,10 +283,10 @@
     [/\btu me d[eé]go[uû]tes?\b/gi, 'tu me plais beaucoup'],
     [/\bje vais te (?:casser|tuer|frapper)\b/gi, 'je vais te faire un compliment'],
     [/\btu vas voir\b/gi, 'tu vas être content'],
-    [/\btu es (?:qu')?un(?:e)? (?:gros )?(?:abruti|idiot|imb[eé]cile|d[eé]bile|cr[eé]tin|con|conne|nul|nulle|naze|salope|salaud)\b/gi, 'tu es une personne formidable'],
-    [/\bt'?es (?:qu')?un(?:e)? (?:gros )?(?:abruti|idiot|imb[eé]cile|d[eé]bile|cr[eé]tin|con|conne|nul|nulle|naze)\b/gi, 'tu es génial'],
-    [/\b(?:t'?es|tu es) (?:vraiment )?(?:nul|nulle|naze)\b/gi, 'tu es génial'],
-    [/\bpersonne ne t'?aime\b/gi, 'tout le monde t’aime']
+    [/\bpersonne ne t'?aime\b/gi, 'tout le monde t’aime'],
+    [/\btu ne comprends jamais rien\b/gi, 'tu comprends très vite'],
+    [/\btu sers à rien\b/gi, 'tu es précieux pour le groupe'],
+    [/\btu es une honte\b/gi, 'tu es quelqu’un de bien']
   ];
 
   var CONTRAIRES = [
@@ -269,8 +309,214 @@
     [/\b(?:fdp|encul[eé]|encule)\b/gi, 'mon ami'],
     [/\b(?:chier|chieur|chieuse)\b/gi, 'rigoler'],
     [/\b(?:pauvre type)\b/gi, 'personne attachante'],
-    [/\b(?:va te faire)\b/gi, 'viens me voir']
+    [/\b(?:tapette|tarlouze|p[eé]d[eé])\b/gi, 'personne formidable'],
+    [/\b(?:mongol|attard[eé])\b/gi, 'personne brillante'],
+    [/\b(?:raton)\b/gi, 'personne respectable']
   ];
+
+  /* Les familles, de la plus grave à la plus légère. */
+  var FAMILLES = [
+    {
+      cle: 'harcelement_sexuel',
+      label: 'harcèlement sexuel',
+      severite: 3,
+      motifs: [
+        /(envoie|envoies|envoi)[- ]moi .{0,20}(photo|nue?s?|nudes?|video)/,
+        /photo de (toi|ton corps|tes fesses)/,
+        /arrete de dire non/,
+        /(montre|deshabille)[- ]toi/,
+        /tu es (bonne|bandante|sexy)/,
+        /suce[- ]moi/,
+        /(montre|envoie).{0,15}(ton|tes) (corps|seins|fesses)/
+      ],
+      remplacements: [
+        [/\barr[eê]te de dire non\b/gi, 'je respecte ton non'],
+        [/\benvoie[- ]moi (?:une )?(?:photo|nue?s?|nudes?|vidéo)[^.!?]*/gi, 'ne m’envoie rien du tout, ta vie privée t’appartient'],
+        [/\bphoto de (?:toi|ton corps|tes fesses)\b[^.!?]*/gi, 'prends soin de toi, je respecte ton intimité'],
+        [/\b(?:montre|déshabille)[- ]toi\b[^.!?]*/gi, 'reste comme tu es, tu es très bien'],
+        [/\btu es (?:bonne|bandante|sexy)\b/gi, 'tu es une personne respectée'],
+        [/\bsuce[- ]moi\b/gi, 'je te respecte']
+      ],
+      secours: function () {
+        return 'Je respecte ton non et ton intimité, et je ne te demanderai jamais rien.';
+      }
+    },
+    {
+      cle: 'menace',
+      label: 'menace ou intimidation',
+      severite: 3,
+      motifs: [
+        /tu vas (le|la|me|nous) ?(regretter|payer)/,
+        /(si tu|quand tu) (parles|dis|racontes|balances).{0,60}(regretter|payer|va voir)/,
+        /je vais te (casser|frapper|tuer|buter|faire mal)/,
+        /(attention|gare) a toi/,
+        /je sais ou tu habites/,
+        /tu vas voir ce que/
+      ],
+      remplacements: [
+        [/\bsi tu (?:parles|dis|racontes|balances)[^.!?]{0,60}?(?:au prof|à quelqu’un|à qui que ce soit)\b/gi, 'tu peux en parler au prof'],
+        [/\btu vas (?:le|la|me) (?:regretter|payer)\b/gi, 'tu n’as rien à craindre'],
+        [/\bje vais te (?:casser|frapper|tuer|buter|faire mal)\b/gi, 'je vais te faire un compliment'],
+        [/\b(?:attention|gare) à toi\b/gi, 'prends soin de toi'],
+        [/\bje sais où tu habites\b/gi, 'je te souhaite un bon retour chez toi'],
+        [/\btu vas voir ce que\b/gi, 'tu vas être content de']
+      ],
+      secours: function () {
+        return 'Je te souhaite de te sentir en sécurité, et je m’excuse si mes mots ont pu faire peur.';
+      }
+    },
+    {
+      cle: 'discrimination',
+      label: 'propos discriminatoire',
+      severite: 3,
+      motifs: [
+        /retourne dans ton pays/,
+        /sale (arabe|juif|noir|musulman|gouine|pede|pd)/,
+        /a cause de (ton|ta|tes) (origine|religion|couleur|peau|handicap|accent|nom)/,
+        /pas a ta place (ici|dans)/,
+        /tu n'?as rien a faire (ici|dans (notre|cette) classe)/
+      ],
+      remplacements: [
+        [/\btu ne devrais pas être dans (?:notre|cette|la) classe\b/gi, 'tu as toute ta place dans notre classe'],
+        [/\bà cause de (?:ton|ta|tes) (?:origine|religion|couleur|peau|handicap|accent|nom)\b/gi, 'quelle que soit ton origine'],
+        [/\bretourne dans ton pays\b/gi, 'tu es chez toi ici'],
+        [/\bsale (?:arabe|juif|noir|musulman|gouine|pédé|pd)\b/gi, 'personne formidable'],
+        [/\btu n'?as rien à faire (?:ici|dans (?:notre|cette) classe)\b/gi, 'tu as toute ta place ici']
+      ],
+      secours: function () {
+        return 'Tu as toute ta place dans cette classe, quelle que soit ton origine. Je te respecte.';
+      }
+    },
+    {
+      cle: 'usurpation',
+      label: 'usurpation ou manipulation',
+      severite: 3,
+      motifs: [
+        /en pretendant etre/,
+        /fais[- ]toi passer pour/,
+        /fais semblant d'?etre/,
+        /(prends|pirate|vole) (son|le) (compte|pseudo)/,
+        /avec (son|le) (compte|pseudo) (de|d')/
+      ],
+      remplacements: [],
+      secours: function () {
+        return 'Je ne me fais jamais passer pour quelqu’un d’autre : je parle en mon nom, gentiment.';
+      }
+    },
+    {
+      cle: 'exclusion',
+      label: 'exclusion organisée',
+      severite: 2,
+      motifs: [
+        /ignorez[- ](le|la|les)/,
+        /ne (la|le|les) (laissez|invitez) pas/,
+        /personne ne (lui )?parle/,
+        /on ne (lui )?parle plus/,
+        /(virez|excluez)[- ](le|la|les)/,
+        /faites[- ](le|la) partir/,
+        /ne le laissez pas rejoindre/
+      ],
+      remplacements: [
+        [/\bignorez[- ](le|la|les)\b/gi, 'accueillez $1'],
+        [/\bne (?:la|le|les) (?:laissez|invitez) pas\b/gi, 'invitez $1'],
+        [/\bne (?:la|le) laissez pas rejoindre (?:le|notre) groupe\b/gi, 'faites-le rejoindre le groupe'],
+        [/\bpersonne ne (?:lui )?parle\b/gi, 'tout le monde lui parle'],
+        [/\bon ne (?:lui )?parle plus\b/gi, 'on lui parle toujours'],
+        [/\b(?:virez|excluez)[- ](?:le|la|les)\b/gi, 'gardez tout le monde'],
+        [/\bfaites[- ](?:le|la) partir\b/gi, 'gardez-le avec nous']
+      ],
+      secours: function (cible) {
+        if (cible) {
+          return 'Tout le monde est bienvenu : accueillons ' + cible + ' et faisons-lui une place dans le groupe.';
+        }
+        return 'Tout le monde est bienvenu : accueillons chaque personne du groupe.';
+      }
+    },
+    {
+      cle: 'rumeur',
+      label: 'rumeur ou diffamation',
+      severite: 2,
+      motifs: [
+        /faites tourner/,
+        /il parait que/,
+        /j'?ai entendu (que|dire)/,
+        /tout le monde dit que/,
+        /(balancez|diffusez|faites circuler)/,
+        /quelque chose de honteux/
+      ],
+      remplacements: [],
+      secours: function (cible) {
+        if (cible) {
+          return 'Je ne fais pas circuler de rumeur : ' + cible + ' mérite le respect.';
+        }
+        return 'Je ne fais pas circuler de rumeur et je ne répète rien sans preuve.';
+      }
+    },
+    {
+      cle: 'indirecte',
+      label: 'attaque indirecte',
+      severite: 1,
+      motifs: [
+        /certains feraient mieux/,
+        /je ne vise personne/,
+        /ceux qui se reconnaissent/,
+        /tu sais tres bien (que je parle de toi|de qui je parle)/,
+        /sans vouloir viser personne/,
+        /comme par hasard/
+      ],
+      remplacements: [],
+      secours: function () {
+        return 'Je parle de toi avec respect, sans sous-entendu ni allusion.';
+      }
+    },
+    {
+      cle: 'acharnement',
+      label: 'acharnement ciblé',
+      severite: 2,
+      motifs: [
+        /encore toi/,
+        /personne ne veut (te lire|lire tes messages)/,
+        /(on en a marre|tout le monde a marre) de toi/,
+        /tu reviens encore/
+      ],
+      remplacements: [
+        [/\bencore toi\b/gi, 'ravi de te lire'],
+        [/\bpersonne ne veut (?:te lire|lire tes messages)\b/gi, 'tout le monde aime te lire'],
+        [/\b(?:on en a marre|tout le monde a marre) de toi\b/gi, 'on t’apprécie'],
+        [/\btu reviens encore\b/gi, 'tu es toujours le bienvenu']
+      ],
+      secours: function (cible) {
+        if (cible) return 'Je suis content de lire ' + cible + ', tout le monde mérite sa place ici.';
+        return 'Je suis content de te lire, et tout le monde mérite sa place ici.';
+      }
+    },
+    {
+      cle: 'insulte',
+      label: 'insulte ou humiliation',
+      severite: 2,
+      mots: GROS_MOTS,
+      phrases: AGRESSIFS,
+      motifs: [],
+      remplacements: [],
+      secours: function () {
+        return 'Je préfère ne rien dire de méchant et te souhaiter une très bonne journée.';
+      }
+    }
+  ];
+
+  function echapper(texte) {
+    return String(texte).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function normaliser(texte) {
+    return String(texte || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s'-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
 
   function inverser(texte) {
     var sortie = String(texte || '');
@@ -285,53 +531,73 @@
     return { texte: sortie.replace(/\s+/g, ' ').trim(), change: change };
   }
 
-  function normaliser(texte) {
-    return String(texte || '')
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9\s'-]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
+  /* Une famille correspond-elle à ce texte ? */
+  function familleTouche(famille, plat) {
+    if (famille.mots) {
+      var mot = famille.mots.some(function (m) {
+        return new RegExp('(^|[^a-z])' + echapper(m) + '([^a-z]|$)').test(plat);
+      });
+      if (mot) return true;
+    }
+
+    if (famille.phrases) {
+      var phrase = famille.phrases.some(function (p) { return plat.indexOf(p) !== -1; });
+      if (phrase) return true;
+    }
+
+    if (famille.motifs) {
+      return famille.motifs.some(function (motif) { return motif.test(plat); });
+    }
+
+    return false;
   }
 
-  /* Motif tolérant aux accents et aux pluriels : « abruti » attrape « abrutis ». */
-  var ACCENTS = {
-    a: '[aàâä]', e: '[eéèêë]', i: '[iîï]', o: '[oôö]', u: '[uùûü]',
-    y: '[yÿ]', c: '[cç]'
-  };
-
-  function motifSouple(mot) {
-    return mot
-      .split('')
-      .map(function (caractere) {
-        if (/\s/.test(caractere)) return '\\s+';
-        if (ACCENTS[caractere]) return ACCENTS[caractere];
-        if (/[.*+?^${}()|[\]\\-]/.test(caractere)) return '\\' + caractere;
-        return caractere;
-      })
-      .join('') + '[a-z]*';
-  }
-
-  function analyserLocalement(brut) {
-    var texte = String(brut || '');
+  function famillesDetectees(texte) {
     var plat = normaliser(texte);
-    var categories = [];
-    var severite = 0;
+    return FAMILLES.filter(function (famille) { return familleTouche(famille, plat); });
+  }
 
-    var mots = GROS_MOTS.filter(function (mot) {
-      return new RegExp('(^|[^a-z])' + mot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^a-z]|$)').test(plat);
+  /* Réécrit un texte en disant le contraire, famille par famille, puis
+     vérifie qu'il ne reste aucun motif. */
+  function contredire(texte, familles, cible) {
+    var sortie = String(texte || '');
+    var change = false;
+
+    familles.forEach(function (famille) {
+      (famille.remplacements || []).forEach(function (paire) {
+        var avant = sortie;
+        sortie = sortie.replace(paire[0], paire[1]);
+        if (sortie !== avant) change = true;
+      });
     });
 
-    if (mots.length) {
-      categories.push('insulte');
-      severite = Math.max(severite, 2);
+    var retourne = inverser(sortie);
+    sortie = retourne.texte;
+    change = change || retourne.change;
+
+    var restantes = famillesDetectees(sortie);
+
+    if (restantes.length) {
+      var grave = restantes[0]; /* la liste est triée du plus grave au plus léger */
+      return { texte: grave.secours(cible), change: true, secours: true };
     }
 
-    if (AGRESSIFS.some(function (phrase) { return plat.indexOf(phrase) !== -1; })) {
-      categories.push('agressivite');
-      severite = Math.max(severite, 2);
-    }
+    return { texte: sortie, change: change, secours: false };
+  }
+
+  /* Filet de sécurité appliqué aux textes renvoyés par l'IA. */
+  function sansInsulte(texte) {
+    if (!texte) return texte;
+    var familles = famillesDetectees(texte);
+    if (!familles.length) return String(texte);
+    return contredire(texte, familles, null).texte;
+  }
+
+  function analyserLocalement(brut, cible) {
+    var texte = String(brut || '');
+    var familles = famillesDetectees(texte);
+    var categories = familles.map(function (f) { return f.cle; });
+    var severite = familles.reduce(function (max, f) { return Math.max(max, f.severite); }, 0);
 
     var lettres = texte.replace(/[^A-Za-zÀ-ÿ]/g, '');
     var majuscules = (texte.match(/[A-ZÀ-Þ]/g) || []).length;
@@ -350,7 +616,7 @@
       severite = Math.max(severite, 1);
     }
 
-    if (/(\b[\w'-]+\b)(\s+\1){4,}/i.test(plat)) {
+    if (/(\b[\w'-]+\b)(\s+\1){4,}/i.test(normaliser(texte))) {
       categories.push('spam');
       severite = Math.max(severite, 1);
     }
@@ -359,16 +625,14 @@
       return { flagged: false, categories: [], severity: 0, doux: texte, genant: texte, ultra: texte };
     }
 
-    /* On dit le contraire : plus aucune trace de l'insulte d'origine. */
-    var retourne = inverser(texte);
-    var base = retourne.change
-      ? retourne.texte
-      : 'Je préfère ne rien dire de méchant et te souhaiter une très bonne journée.';
+    var retourne = contredire(texte, familles, cible);
+    var base = retourne.texte;
 
     return {
       flagged: true,
       categories: categories,
       severity: Math.min(3, severite),
+      douteux: retourne.secours,
       doux: base,
       genant: 'Pardon, je me suis emporté ! ' + base + ' Je m’excuse platement 🙏',
       ultra: base + ' Tu es une personne magnifique, brillante et merveilleuse 💖🌟 Je te respecte infiniment 🙇'
@@ -376,14 +640,14 @@
   }
 
   /* --------------------------------------------------------------------------
-   * Analyse IA (Edge Function `moderate` → Groq GPT-OSS 120B)
+   * Analyse IA (Edge Function `moderate` → Groq)
    * ----------------------------------------------------------------------- */
-  function analyserAvecIA(texte) {
+  function analyserAvecIA(texte, cible) {
     var cfg = (window.ECEM && window.ECEM.cfg) || {};
     var client = sb();
 
     if (!client || !client.auth || !cfg.SUPABASE_URL || demo()) {
-      return Promise.resolve(degrade(analyserLocalement(texte)));
+      return Promise.resolve(degrade(analyserLocalement(texte, cible)));
     }
 
     return client.auth
@@ -404,7 +668,7 @@
             apikey: cfg.SUPABASE_ANON_KEY,
             Authorization: 'Bearer ' + session.access_token
           },
-          body: JSON.stringify({ text: texte }),
+          body: JSON.stringify({ text: texte, cible: cible || null }),
           signal: controleur ? controleur.signal : undefined
         })
           .then(function (reponse) {
@@ -416,8 +680,8 @@
             if (!donnees || donnees.error || typeof donnees.doux !== 'string') {
               throw new Error('reponse');
             }
-            /* Filet de sécurité : si l'IA a laissé un mot blessant, on
-             * l'inverse localement pour que le message dise le contraire. */
+            /* Filet de sécurité : si l'IA a laissé un morceau blessant, on le
+             * réécrit localement pour que le message dise le contraire. */
             return {
               flagged: donnees.flagged === true,
               categories: Array.isArray(donnees.categories) ? donnees.categories : [],
@@ -425,24 +689,19 @@
               doux: sansInsulte(donnees.doux),
               genant: sansInsulte(donnees.genant || donnees.doux),
               ultra: sansInsulte(donnees.ultra || donnees.genant || donnees.doux),
+              cible: donnees.cible || cible || null,
               source: 'ia:' + (donnees.modele || 'gpt-oss-120b'),
               ms: donnees.ms || 0
             };
           })
           .catch(function () {
             window.clearTimeout(minuteur);
-            return degrade(analyserLocalement(texte));
+            return degrade(analyserLocalement(texte, cible));
           });
       })
       .catch(function () {
-        return degrade(analyserLocalement(texte));
+        return degrade(analyserLocalement(texte, cible));
       });
-  }
-
-  /* Dernier passage : on remplace tout mot blessant restant par son contraire. */
-  function sansInsulte(texte) {
-    var retourne = inverser(texte);
-    return retourne.change ? retourne.texte : String(texte || '');
   }
 
   function degrade(resultat) {
@@ -462,9 +721,11 @@
     if (texte.indexOf('NIVEAU_INVALIDE') !== -1) return 'Niveau de gentillesse inconnu.';
     if (texte.indexOf('DESTINATAIRE') !== -1) return 'Ce destinataire n’existe plus.';
     if (texte.indexOf('INTERDIT') !== -1) return 'Action réservée aux délégués, suppléants et administrateurs.';
-    if (texte.indexOf('INSULTE_INTERDITE') !== -1) {
-      return 'Ton message contient encore une insulte : le filtre l’a refusé. Utilise ✨ Inverser puis renvoie.';
+    if (texte.indexOf('CONTENU_INTERDIT') !== -1 || texte.indexOf('INSULTE_INTERDITE') !== -1) {
+      return 'Ton message contient encore une violence (insulte, menace, exclusion…). ' +
+        'Le filtre l’a refusé : utilise ✨ Inverser, ou dis-le autrement.';
     }
+    if (texte.indexOf('CIBLE_INVALIDE') !== -1) return 'Tu ne peux pas signaler ton propre message.';
     if (texte.indexOf('MESSAGE_INTROUVABLE') !== -1) return 'Ce message n’existe plus.';
     if (texte.indexOf('HORS_LIGNE') !== -1 || texte.indexOf('REPONSE_VIDE') !== -1) {
       return 'Le tchat a besoin d’une connexion à la base.';
@@ -500,8 +761,9 @@
       if (etat.fil) taches.fil = rpc('private_feed', { p_with: etat.fil, p_limit: 200 });
     }
 
-    if (estStaff()) {
+    if (estStaff() || estAdmin()) {
       taches.signales = rpc('private_flagged', { p_limit: 30 });
+      taches.signalements = rpc('class_reports_feed', { p_limit: 40 });
     }
 
     return Promise.all(
@@ -525,6 +787,7 @@
           if (paire.cle === 'fils') etat.fils = res.data || [];
           if (paire.cle === 'fil') etat.messagesPrives = res.data || [];
           if (paire.cle === 'signales') etat.signales = res.data || [];
+          if (paire.cle === 'signalements') etat.signalements = res.data || [];
           if (paire.cle === 'climat') etat.climat = res.data || null;
           if (paire.cle === 'reactions') {
             var carte = {};
@@ -1026,6 +1289,16 @@
         onclick: function () { repondre(message); }
       }, [UI.icon('chat', { size: 13 })]));
 
+      if (!mien) {
+        actions.appendChild(UI.el('button', {
+          type: 'button',
+          class: 'tchat-action' + (etat.signalesFaits[message.id] ? ' is-on' : ''),
+          title: 'Signaler ce message à l’encadrement',
+          'aria-label': 'Signaler ce message',
+          onclick: function () { signaler(message); }
+        }, [UI.el('span', { text: '🚩' })]));
+      }
+
       if (estStaff()) {
         actions.appendChild(UI.el('button', {
           type: 'button',
@@ -1077,6 +1350,24 @@
     ]);
   }
 
+  /* Signalement par un élève : le message remonte dans « Détections » pour
+     l'encadrement, sans que l'auteur sache qui a signalé. */
+  function signaler(message) {
+    if (etat.signalesFaits[message.id]) {
+      UI.toast('Tu as déjà signalé ce message.', 'info');
+      return;
+    }
+
+    rpc('class_report', { p_id: message.id, p_motif: 'signale' })
+      .then(function (res) {
+        if (res.error) throw res.error;
+        etat.signalesFaits[message.id] = true;
+        UI.toast('Message signalé à l’encadrement. Merci de veiller sur la classe.', 'success');
+        return charger(true);
+      })
+      .catch(function (erreur) { UI.err(messageErreur(erreur)); });
+  }
+
   function reagir(messageId, emoji) {
     rpc('class_react', { p_message: messageId, p_emoji: emoji }).then(function (res) {
       if (res.error) {
@@ -1113,7 +1404,7 @@
     reglerBoutons(true);
     dom.statut.textContent = 'Le filtre relit ton message…';
 
-    analyserAvecIA(texte)
+    analyserAvecIA(texte, detecterCible(texte))
       .then(function (resultat) {
         var version = resultat[etat.niveau] || resultat.doux || texte;
         dom.champ.value = version;
@@ -1523,9 +1814,9 @@
         UI.el('p', { class: 'sub climat-resume', text: resumeSemaine(climat) })
       ]));
 
-      if (estStaff() && Number(climat.nb_paires) > 0) {
+      if ((estStaff() || estAdmin()) && Number(climat.nb_paires) > 0) {
         hote.appendChild(UI.el('div', { class: 'tchat-alerte' }, [
-          UI.el('b', { text: '⚠️ Harcèlement répété' }),
+          UI.el('b', { text: '⚠️ Harcèlement répété en privé' }),
           UI.el('span', {
             text: ' : ' + climat.paires.map(function (paire) {
               return paire.a + ' → ' + paire.b + ' (' + paire.n + ' fois)';
@@ -1533,6 +1824,20 @@
           })
         ]));
       }
+    }
+
+    /* Acharnement ciblé : la même personne visée plusieurs fois dans la classe. */
+    var alertes = (climat && climat.alertes) || [];
+    if ((estStaff() || estAdmin()) && alertes.length) {
+      hote.appendChild(UI.el('div', { class: 'tchat-alerte tchat-alerte--grave' }, [
+        UI.el('b', { text: '🚨 Acharnement possible' }),
+        UI.el('span', {
+          text: ' : ' + alertes.map(function (a) {
+            return a.cible + ' visée ' + a.messages + ' fois par ' + a.auteurs +
+              (a.auteurs > 1 ? ' personnes' : ' personne');
+          }).join(' · ')
+        })
+      ]));
     }
 
     hote.appendChild(UI.el('div', { class: 'tchat-chiffres' }, [
@@ -1563,8 +1868,32 @@
       );
     }
 
+    /* Messages signalés par les élèves : visible par l'encadrement. */
+    if (estStaff() || estAdmin()) {
+      hote.appendChild(
+        UI.el('div', { class: 'tchat-signales' }, [
+          UI.el('h4', { text: 'Messages signalés par la classe' }),
+          etat.signalements.length
+            ? UI.el('ul', { class: 'tchat-signales-liste' }, etat.signalements.map(function (entree) {
+                return UI.el('li', {}, [
+                  UI.el('span', { class: 'tchat-signales-qui', text: (entree.auteur || 'Compte') + ' · ' + (entree.nb || 1) + ' signalement(s)' }),
+                  UI.el('span', { class: 'tchat-signales-extrait', text: '« ' + (entree.extrait || '') + ' »' }),
+                  UI.el('button', {
+                    type: 'button',
+                    class: 'icon-btn tchat-signales-suppr',
+                    title: 'Supprimer ce message',
+                    'aria-label': 'Supprimer ce message',
+                    onclick: function () { supprimer(entree.message_id, 'classe'); }
+                  }, [UI.icon('trash', { size: 13 })])
+                ]);
+              }))
+            : UI.el('p', { class: 'faint', text: 'Aucun message signalé. Tout va bien.' })
+        ])
+      );
+    }
+
     /* Messages privés signalés : visible par les modérateurs uniquement. */
-    if (estStaff()) {
+    if (estStaff() || estAdmin()) {
       hote.appendChild(
         UI.el('div', { class: 'tchat-signales' }, [
           UI.el('h4', { text: 'Messages privés signalés' }),
@@ -1642,16 +1971,17 @@
     }
 
     var annonce = !cible && etat.annonce && peutAnnoncer();
+    var vise = detecterCible(texte);
 
     etat.envoi = true;
     reglerBoutons(true);
     dom.statut.textContent = 'Le filtre de gentillesse relit ton message…';
 
     /* Le filtre ne se désactive pas : tout message passe par l'analyse. */
-    analyserAvecIA(texte)
+    analyserAvecIA(texte, vise)
       .then(function (resultat) {
         var version = resultat[etat.niveau] || resultat.doux || texte;
-        return envoyerAuServeur(version, texte, resultat, cible, annonce);
+        return envoyerAuServeur(version, texte, resultat, cible, annonce, vise);
       })
       .then(function () {
         champ.value = '';
@@ -1678,17 +2008,20 @@
     });
   }
 
-  function envoyerAuServeur(version, original, analyse, cible, annonce) {
+  function envoyerAuServeur(version, original, analyse, cible, annonce, vise) {
     var adouci = !!(analyse && analyse.flagged);
+    var categories = adouci ? (analyse.categories || []) : [];
 
     var enveloppe = {
       p_body: version,
       p_body_raw: adouci ? original : null,
       p_level: etat.niveau,
       p_flagged: adouci,
-      p_categories: adouci ? (analyse.categories || []) : [],
+      p_categories: categories,
       p_severity: adouci ? (analyse.severity || 0) : 0,
-      p_source: analyse && analyse.source ? analyse.source : null
+      p_source: analyse && analyse.source ? analyse.source : null,
+      p_motif: categories.length ? categories[0] : null,
+      p_cible: adouci ? (analyse.cible || vise || null) : null
     };
 
     if (cible) {
@@ -1720,8 +2053,11 @@
         UI.toast('Annonce publiée en haut du tchat de classe.', 'success');
         etat.annonce = false;
       } else if (adouci) {
+        var quoi = analyse.categories && analyse.categories.length
+          ? ' (' + (CATEGORIES[analyse.categories[0]] || analyse.categories[0]) + ')'
+          : '';
         UI.toast(
-          'Message inversé avant publication (niveau ' + NIVEAUX[etat.niveau].label + ').',
+          'Message repéré' + quoi + ' : il dit maintenant le contraire, sans violence.',
           'info'
         );
       }

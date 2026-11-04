@@ -2836,6 +2836,13 @@ textarea { resize: vertical; min-height: 96px; line-height: 1.5; }
   font-size: .82rem;
 }
 
+.tchat-alerte--grave {
+  border-width: 2px;
+  border-color: var(--red);
+  background: rgba(229, 72, 77, .16);
+}
+.tchat-alerte--grave b { letter-spacing: .01em; }
+
 .tchat-compliment.is-active {
   border-color: var(--accent);
   background: var(--accent-soft);
