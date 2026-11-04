@@ -2818,3 +2818,70 @@ textarea { resize: vertical; min-height: 96px; line-height: 1.5; }
   .donneurs .faint { display: none; }
   .prog-corps { gap: 12px; }
 }
+
+/* ============================================================================
+ * Administration
+ * ==========================================================================*/
+.admin-content { display: grid; gap: 16px; }
+
+.admin-tete { display: grid; gap: 4px; }
+.admin-titre { font-family: var(--font-display); font-size: 1.35rem; font-weight: 800; }
+
+.admin-stats {
+  display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+}
+.admin-chiffre {
+  display: grid; gap: 2px; padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-2, rgba(255, 255, 255, .03));
+}
+.admin-chiffre b { font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+.admin-chiffre span { font-size: .74rem; text-transform: uppercase; letter-spacing: .04em; }
+
+.admin-seg { margin: 2px 0; }
+
+.admin-barre { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+.admin-barre .input { flex: 1; }
+
+.admin-liste { display: grid; gap: 8px; }
+
+.admin-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); background: var(--surface);
+  transition: border-color .16s var(--ease), background .16s var(--ease);
+}
+.admin-row:hover { border-color: var(--border-strong); }
+.admin-row.is-banned { border-color: rgba(229, 72, 77, .45); background: rgba(229, 72, 77, .06); }
+
+.admin-identite { flex: 1; min-width: 0; }
+.admin-nom { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.admin-sous { font-size: .78rem; }
+
+.admin-actions { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.admin-actions .icon-btn {
+  width: 30px; height: 30px; display: inline-grid; place-items: center;
+  border: 1px solid transparent; border-radius: 8px; background: none;
+  color: var(--text-soft); cursor: pointer;
+}
+.admin-actions .icon-btn:hover { border-color: var(--border); background: var(--surface-2, transparent); color: var(--text); }
+.admin-actions .icon-btn.is-on { color: var(--gold, #b4780a); border-color: rgba(233, 162, 24, .45); background: rgba(233, 162, 24, .12); }
+.admin-actions .icon-btn--danger:hover { color: var(--red, #e5484d); border-color: rgba(229, 72, 77, .5); }
+
+.admin-codes { display: grid; gap: 12px; justify-items: start; }
+
+.pill--danger {
+  background: rgba(229, 72, 77, .14);
+  border: 1px solid rgba(229, 72, 77, .4);
+  color: var(--red, #e5484d);
+}
+
+/* Écran de suspension */
+.suspendu .empty-ico { color: var(--red, #e5484d); }
+
+@media (max-width: 640px) {
+  .admin-row { flex-wrap: wrap; }
+  .admin-actions { width: 100%; justify-content: flex-start; }
+  .admin-sous { font-size: .74rem; }
+}

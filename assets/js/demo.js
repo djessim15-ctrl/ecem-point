@@ -693,6 +693,103 @@
         : 100;
       return { score: score, messages_7j: semaine.length, drapeaux_7j: drapeaux.length, paires: paires, nb_paires: paires.length };
     },
+    am_i_admin: function () { return getRole() === 'delegue' || !!db.demoAdmin; },
+    admin_claim: function (args) {
+      /* En démo, n'importe quel code d'au moins 6 caractères est accepté :
+       * le vrai code n'est jamais présent dans le dépôt public. */
+      if (!args.p_code || String(args.p_code).length < 6) fail('CODE_INVALIDE');
+      db.demoAdmin = true;
+      return { admin: true };
+    },
+    is_admin: function () { return getRole() === 'delegue'; },
+    is_banned: function () { return false; },
+    admin_list: function () {
+      if (getRole() !== 'delegue') fail('INTERDIT');
+      return profiles.map(function (p) {
+        return {
+          id: p.id,
+          prenom: p.prenom,
+          role: p.role,
+          points: p.points,
+          banned_at: p.banned_at || null,
+          ban_reason: p.ban_reason || null,
+          created_at: p.created_at || null,
+          last_seen_at: p.last_seen_at || null,
+          admin: p.role === 'delegue'
+        };
+      });
+    },
+    admin_stats: function () {
+      if (getRole() !== 'delegue') fail('INTERDIT');
+      var semaine = Date.now() - 7 * 86400000;
+      return {
+        comptes: profiles.length,
+        bannis: profiles.filter(function (p) { return p.banned_at; }).length,
+        admins: profiles.filter(function (p) { return p.role === 'delegue'; }).length,
+        codes: 9,
+        codes_libres: 9,
+        mouvements_7j: events.filter(function (e) {
+          return new Date(e.created_at).getTime() > semaine;
+        }).length,
+        messages_7j: classMessages.filter(function (m) {
+          return new Date(m.created_at).getTime() > semaine;
+        }).length
+      };
+    },
+    admin_ban: function (args) {
+      if (getRole() !== 'delegue') fail('INTERDIT');
+      var cible = byId(args.p_user);
+      if (!cible) fail('ELEVE_INTROUVABLE');
+      if (args.p_user === db.meId) fail('CIBLE_INVALIDE');
+      cible.banned_at = new Date().toISOString();
+      cible.ban_reason = args.p_reason || null;
+      touchProfile(cible);
+      return { prenom: cible.prenom, suspendu: true };
+    },
+    admin_unban: function (args) {
+      if (getRole() !== 'delegue') fail('INTERDIT');
+      var cible = byId(args.p_user);
+      if (!cible) fail('ELEVE_INTROUVABLE');
+      cible.banned_at = null;
+      cible.ban_reason = null;
+      touchProfile(cible);
+      return { prenom: cible.prenom, suspendu: false };
+    },
+    admin_delete: function (args) {
+      if (getRole() !== 'delegue') fail('INTERDIT');
+      if (args.p_user === db.meId) fail('CIBLE_INVALIDE');
+      var cible = byId(args.p_user);
+      if (!cible) fail('ELEVE_INTROUVABLE');
+      var index = profiles.indexOf(cible);
+      if (index >= 0) profiles.splice(index, 1);
+      return { prenom: cible.prenom, supprime: true };
+    },
+    admin_set_role: function (args) {
+      if (getRole() !== 'delegue') fail('INTERDIT');
+      var cible = byId(args.p_user);
+      if (!cible) fail('ELEVE_INTROUVABLE');
+      cible.role = args.p_role;
+      touchProfile(cible);
+      return { prenom: cible.prenom, role: args.p_role };
+    },
+    admin_set_admin: function (args) {
+      if (getRole() !== 'delegue') fail('INTERDIT');
+      var cible = byId(args.p_user);
+      if (!cible) fail('ELEVE_INTROUVABLE');
+      return { prenom: cible.prenom, admin: !!args.p_admin };
+    },
+    admin_reset_password: function (args) {
+      if (getRole() !== 'delegue') fail('INTERDIT');
+      var cible = byId(args.p_user);
+      if (!cible) fail('ELEVE_INTROUVABLE');
+      if (!args.p_password || args.p_password.length < 6) fail('MOT_DE_PASSE_TROP_COURT');
+      return { prenom: cible.prenom, reinitialise: true };
+    },
+    admin_add_code: function (args) {
+      if (getRole() !== 'delegue') fail('INTERDIT');
+      if (!args.p_code || args.p_code.length < 4) fail('CODE_INVALIDE');
+      return { role: args.p_role, ajoute: true };
+    },
     my_role: function () { return getRole(); },
     is_staff: function () { return getRole() !== 'eleve'; },
     can_award: function () { return getRole() === 'delegue' || (getRole() === 'suppleant' && settings.suppleant_can_award); },

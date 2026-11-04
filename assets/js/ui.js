@@ -525,6 +525,7 @@
       PRENOM_INVALIDE: 'Prénom refusé : 2 à 24 caractères, lettres, chiffres, espace, tiret ou apostrophe.',
       PRENOM_PRIS: 'Ce prénom est déjà utilisé dans la classe. Ajoute ton initiale de nom si besoin.',
       COMPTE_DEJA_ACTIVE: 'Ce compte est déjà activé. Connecte-toi plutôt.',
+      TROP_DE_TENTATIVES: 'Trop d’essais. Attends un quart d’heure puis réessaie.',
       CODE_INVALIDE: 'Code refusé. Vérifie qu’il est recopié exactement (majuscules et tirets compris).',
       CODE_DEJA_UTILISE: 'Ce code a déjà créé un compte. Connecte-toi plutôt avec ton prénom et ce code comme mot de passe, ou utilise un autre code.',
       CODE_MAUVAIS_ROLE: 'Ce code n’est pas celui du rôle coché. Vérifie la case Élève / Suppléant / Délégué, ou demande le bon code.',
