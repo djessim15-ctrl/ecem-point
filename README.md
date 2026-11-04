@@ -112,9 +112,11 @@ latence, et propose **Ouvrir Supabase** + **Réessayer**.
 
 ### Codes d’inscription (délégué / suppléant)
 
-Un code = **un compte**, utilisable **une seule fois**. Il n’est jamais stocké
-en clair (seule son empreinte SHA‑256 est en base), donc il est **impossible de
-le relire** : si un code est perdu ou déjà consommé, on en crée un nouveau.
+Un code peut créer **plusieurs comptes** (tous les délégués de l’année peuvent
+utiliser le même). Il n’est jamais stocké en clair — seule son empreinte
+SHA‑256 est en base — donc il est **impossible de le relire** : s’il est perdu,
+on en crée un nouveau. La colonne `use_count` indique combien de comptes il a
+servi, `used_by` / `used_at` gardent le dernier.
 
 ```sql
 -- SQL Editor → créer un code (remplacer par le code choisi, entre guillemets)
@@ -123,10 +125,8 @@ values ('Délégué 5', 'delegue',
         encode(extensions.digest('DEL-XXXX-XXXX', 'sha256'), 'hex'))
 on conflict (code_hash) do nothing;
 
--- Voir l’état des codes : LIBRE ou UTILISÉ, et par qui
-select s.label, s.role,
-       case when s.used_by is null then 'LIBRE' else 'UTILISÉ' end as etat,
-       p.prenom as utilise_par
+-- Voir l’état des codes : nombre d’inscriptions et dernier compte créé
+select s.label, s.role, s.use_count as inscriptions, p.prenom as dernier_compte
   from public.staff_codes s
   left join public.profiles p on p.id = s.used_by
  order by s.role, s.created_at;
@@ -140,7 +140,6 @@ Trois refus possibles, désormais distincts à l’écran :
 | Message | Signification |
 |---|---|
 | **Code refusé…** | le code n’existe pas (faute de frappe) |
-| **Ce code a déjà créé un compte** | une seule utilisation : connecte-toi avec ton prénom + ce code, ou prends un autre code |
 | **Ce code n’est pas celui du rôle coché** | le code est valide, mais pour l’autre rôle | Pour « rendre » un code consommé par erreur :
 
 ```sql
