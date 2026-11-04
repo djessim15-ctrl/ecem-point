@@ -51,6 +51,18 @@ python3 -m http.server 8080
 | **Tchat de classe** | Tchats | tous les rôles, messages adoucis par IA, journal des détections |
 | **Messages privés** | Tchats → Messages privés | conversations 1 à 1, filtrées comme le tchat public |
 | **Filtre de gentillesse** | Tchats | 3 niveaux (Doux / Gênant / Ultra), interrupteur, repli local hors-ligne |
+| **Niveaux & titres** | Accueil | Novice → Légende, barre de progression vers le palier suivant |
+| **Série 🔥** | Accueil | jours consécutifs avec au moins un point reçu |
+| **Roue de la fortune** | Accueil (élèves) | un tirage par semaine : 1, 2, 3 ou 5 points |
+| **Heure dorée** | Accueil (staff) | points ×2 pendant 30 min pour toute la classe |
+| **Annulation 10 s** | Toutes les actions | bouton « Annuler » dans la notification, 15 s côté serveur |
+| **Qui m'a donné quoi** | Mon historique | répartition des points reçus par personne |
+| **Réactions emoji** | Tchat de classe | ❤️ 😂 👏 sous chaque message |
+| **Répondre à un message** | Tchat de classe | citation du message d'origine |
+| **Messages épinglés** | Tchat de classe | l'encadrement épingle les annonces en haut |
+| **Adoucir avant envoi** | Tchat de classe | ✨ réécrit ton propre message avant publication |
+| **Climat de classe** | Tchats → Détections | score 0-100, résumé de la semaine, alertes de harcèlement répété |
+| **Compliment forcé** | Tchats (staff) | impose la version « Ultra » à tout le monde |
 | **Confettis, sons, vibrations** | partout | retours immédiats, désactivables dans le profil |
 | **Mode démo** | `app.html?demo=1` | classe fictive en mémoire, bascule élève / suppléant / délégué |
 | **Installation PWA** | navigateur | manifeste, icônes, service worker (coquille hors ligne) |
@@ -627,3 +639,35 @@ même filtre, les mêmes trois niveaux et le même anti-flood (10 messages / 30 
 
 Migrations concernées : `0008_class_chat.sql`, `0009_moderation_ia.sql`,
 `0010_private_chat.sql`.
+
+## 10. Progression, justice et vie du tchat
+
+Ce lot ajoute la couche « jeu » et les garde-fous attendus d'un outil de classe.
+
+**Niveaux** (`assets/js/progress.js`) : Novice 0, Apprenti 10, Éclaireur 25,
+Aventurier 45, Expert 70, Maître 100, Légende 140 points. La carte de
+progression et la série 🔥 sont calculées côté navigateur à partir de
+l'historique déjà chargé : aucune requête supplémentaire.
+
+**Annulation** : chaque mouvement de points renvoie son `event_id`
+(`award_points`, `remove_points`, `transfer_points`). La notification propose
+« Annuler » ; `cancel_event()` n'accepte que l'auteur du mouvement et seulement
+pendant **15 secondes**, puis remet les soldes en état et supprime la ligne.
+
+**Heure dorée** : `start_golden(30)` / `stop_golden()` (encadrement). Tant que
+`app_settings.golden_until` est dans le futur, `award_points` multiplie le
+montant par `golden_multiplier` (2 par défaut) — le bonus est réel, pas cosmétique.
+
+**Roue de la fortune** : `wheel_spin()` tire 1, 2, 3 ou 5 points, une fois par
+semaine et par élève (`wheel_spins`, clé `user_id + week_start`).
+
+**Tchat** : réactions (`class_react`), réponses citées (`reply_to`), épingles
+(`class_chat_pin`, réservé à l'encadrement), bouton **Adoucir** qui réécrit le
+message avant l'envoi sans le publier.
+
+**Modération** : `class_climate()` renvoie le score 0-100 (part des messages
+repérés sur 7 jours, pénalité par paire de harcèlement), un résumé en français
+et les paires auteur → destinataire signalées au moins 3 fois en 30 jours.
+`set_compliment(true)` force la version Ultra pour tout le monde.
+
+Migrations : `0011_points_et_tchats.sql`, `0012_annulation_et_reglages.sql`.

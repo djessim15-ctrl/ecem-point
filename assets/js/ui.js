@@ -288,9 +288,22 @@
     }
 
     var icons = { ok: 'check-circle', error: 'alert', info: 'info', star: 'sparkles' };
+    var actionBtn = null;
+    if (opts.action && opts.action.label) {
+      actionBtn = UI.el('button', {
+        type: 'button',
+        class: 'toast-action',
+        onclick: function () {
+          dismiss();
+          if (typeof opts.action.onClick === 'function') opts.action.onClick();
+        }
+      }, [opts.action.label]);
+    }
+
     var box = UI.el('div', { class: 'toast toast--' + kind, role: 'status' }, [
       UI.el('span', { class: 'toast-ico' }, [UI.icon(icons[kind] || 'info', { size: 18 })]),
       UI.el('span', { class: 'toast-msg', text: message }),
+      actionBtn,
       UI.el('button', {
         type: 'button', class: 'toast-close', 'aria-label': 'Fermer la notification',
         onclick: function () { dismiss(); }

@@ -33,6 +33,8 @@
     ultra: { label: 'Ultra', aide: 'Absurde et mielleux, emojis partout.' }
   };
 
+  var EMOJIS = ['❤️', '😂', '👏'];
+
   var CATEGORIES = {
     insulte: 'insulte',
     gros_mot: 'gros mot',
@@ -94,6 +96,9 @@
     fils: [],
     fil: null,
     messagesPrives: [],
+    reactions: {},
+    climat: null,
+    reponse: null,
     choixOuvert: false,
     choixRecherche: '',
     erreur: null,
@@ -112,6 +117,38 @@
 
   function demo() {
     return !!(window.ECEM && window.ECEM.demo);
+  }
+
+  function reglages() {
+    var store = window.ECEM && window.ECEM.Store;
+    return (store && store.state && store.state.settings) || {};
+  }
+
+  function complimentForce() {
+    return !!(reglages() && reglages().compliment_force);
+  }
+
+  function resumeSemaine(climat) {
+    if (!climat) return '';
+    var messages = Number(climat.messages_7j) || 0;
+    var drapeaux = Number(climat.drapeaux_7j) || 0;
+    var score = Number(climat.score) || 0;
+
+    if (!messages) return 'Aucun message cette semaine : le climat ne peut pas encore être évalué.';
+
+    var ton = score >= 80 ? 'très serein' : score >= 60 ? 'globalement serein' : score >= 40 ? 'un peu tendu' : 'difficile';
+
+    var phrase = 'Cette semaine : ' + messages + ' message' + (messages > 1 ? 's' : '') +
+      ' dans la classe, ' + drapeaux + ' repéré' + (drapeaux > 1 ? 's' : '') +
+      ' par le filtre. Le climat est ' + ton + ' (' + score + '/100).';
+
+    if (climat.nb_paires > 0) {
+      phrase += ' Attention : ' + climat.nb_paires + ' échange' + (climat.nb_paires > 1 ? 's' : '') +
+        ' privé' + (climat.nb_paires > 1 ? 's' : '') + ' répété' + (climat.nb_paires > 1 ? 's' : '') +
+        ' entre les mêmes personnes.';
+    }
+
+    return phrase;
   }
 
   function estStaff() {
@@ -369,7 +406,9 @@
     var taches = {
       feed: rpc('class_chat_feed', { p_limit: 200 }),
       stats: rpc('moderation_stats'),
-      journal: rpc('moderation_feed', { p_limit: 40 })
+      journal: rpc('moderation_feed', { p_limit: 40 }),
+      reactions: rpc('class_reactions_feed', { p_limit: 300 }),
+      climat: rpc('class_climate')
     };
 
     if (etat.onglet === 'prive') {
@@ -399,6 +438,15 @@
           if (paire.cle === 'fils') etat.fils = res.data || [];
           if (paire.cle === 'fil') etat.messagesPrives = res.data || [];
           if (paire.cle === 'signales') etat.signales = res.data || [];
+          if (paire.cle === 'climat') etat.climat = res.data || null;
+          if (paire.cle === 'reactions') {
+            var carte = {};
+            (res.data || []).forEach(function (ligne) {
+              if (!carte[ligne.message_id]) carte[ligne.message_id] = [];
+              carte[ligne.message_id].push(ligne);
+            });
+            etat.reactions = carte;
+          }
         });
         etat.erreur = null;
         etat.dernierChargement = Date.now();
@@ -511,6 +559,27 @@
 
     dom.compteur = UI.el('span', { class: 'pill pill--muted' });
 
+    dom.btnCompliment = null;
+    if (estStaff()) {
+      dom.btnCompliment = UI.el('button', {
+        type: 'button',
+        class: 'btn btn-ghost btn-sm tchat-compliment',
+        onclick: function () {
+          var client = sb();
+          if (!client || typeof client.rpc !== 'function') return;
+          client.rpc('set_compliment', { p_on: !complimentForce() }).then(function (res) {
+            if (res.error) { UI.err(messageErreur(res.error)); return; }
+            var store = window.ECEM.Store;
+            if (store && store.refreshAll) {
+              store.refreshAll().then(function () { peindre(); }).catch(function () { peindre(); });
+            } else {
+              peindre();
+            }
+          });
+        }
+      }, [UI.el('span', { text: '💖' }), UI.el('span', { class: 'hide-sm', text: 'Compliment forcé' })]);
+    }
+
     dom.entete = UI.el('div', { class: 'tchat-head' }, [
       UI.el('div', { class: 'tchat-head-txt' }, [
         UI.el('h2', { id: 'tchat-title', text: 'Tchats' }),
@@ -519,7 +588,13 @@
           text: 'Un filtre de gentillesse relit chaque message, public comme privé, avant publication.'
         })
       ]),
-      UI.el('div', { class: 'tchat-outils' }, [dom.bascule, dom.niveaux, dom.btnStats, dom.compteur])
+      UI.el('div', { class: 'tchat-outils' }, [
+        dom.bascule,
+        dom.niveaux,
+        dom.btnStats,
+        dom.btnCompliment,
+        dom.compteur
+      ])
     ]);
 
     /* --- onglets ------------------------------------------------------- */
@@ -537,16 +612,28 @@
 
     dom.champ = creerChamp('Écris à la classe… (Entrée pour envoyer)');
     dom.btnEnvoyer = boutonEnvoi();
+    dom.btnAdoucir = UI.el('button', {
+      type: 'button',
+      class: 'btn btn-ghost btn-sm tchat-adoucir',
+      title: 'L’IA réécrit ton message plus gentiment avant l’envoi',
+      onclick: function () { adoucir(); }
+    }, [UI.el('span', { text: '✨' }), UI.el('span', { class: 'hide-sm', text: 'Adoucir' })]);
+
     dom.form = UI.el('form', {
       class: 'chat-form',
       onsubmit: function (evenement) {
         evenement.preventDefault();
         envoyer(null);
       }
-    }, [dom.champ, dom.btnEnvoyer]);
+    }, [dom.btnAdoucir, dom.champ, dom.btnEnvoyer]);
+
+    dom.reponse = UI.el('div', { class: 'tchat-reponse', hidden: true });
+    dom.epingles = UI.el('div', { class: 'tchat-epingles', hidden: true });
 
     dom.panneauClasse = UI.el('div', { class: 'tchat-panneau', dataset: { panneau: 'classe' } }, [
+      dom.epingles,
       dom.log,
+      dom.reponse,
       dom.form
     ]);
 
@@ -670,10 +757,20 @@
     dom.bascule.setAttribute('aria-pressed', etat.filtre ? 'true' : 'false');
     dom.bascule.classList.toggle('is-off', !etat.filtre);
 
+    var force = complimentForce();
+    if (force && etat.niveau !== 'ultra') etat.niveau = 'ultra';
+
     UI.$$('.tchat-seg-btn', dom.niveaux).forEach(function (bouton) {
       bouton.classList.toggle('is-active', bouton.dataset.niveau === etat.niveau);
-      bouton.disabled = !etat.filtre;
+      bouton.disabled = !etat.filtre || force;
     });
+
+    if (dom.btnCompliment) {
+      dom.btnCompliment.classList.toggle('is-active', force);
+      dom.btnCompliment.title = force
+        ? 'Compliment forcé activé : tout le monde écrit en version Ultra'
+        : 'Forcer la version Ultra pour tout le monde';
+    }
 
     UI.$$('.tchat-onglet', dom.onglets).forEach(function (bouton) {
       var actif = bouton.dataset.onglet === etat.onglet;
@@ -701,8 +798,13 @@
     dom.panneauClasse.hidden = etat.onglet !== 'classe';
     dom.panneauPrive.hidden = etat.onglet !== 'prive';
 
-    if (etat.onglet === 'classe') peindreMessages();
-    else peindrePrives();
+    if (etat.onglet === 'classe') {
+      peindreMessages();
+      peindreEpingles();
+      peindreReponse();
+    } else {
+      peindrePrives();
+    }
   }
 
   function peindreMessages() {
@@ -735,6 +837,35 @@
     if (enBas) log.scrollTop = log.scrollHeight;
   }
 
+  function trouverMessage(id) {
+    for (var i = 0; i < etat.messages.length; i++) {
+      if (String(etat.messages[i].id) === String(id)) return etat.messages[i];
+    }
+    return null;
+  }
+
+  function rangeeReactions(messageId) {
+    var liste = etat.reactions[messageId] || [];
+    var parEmoji = {};
+    liste.forEach(function (ligne) { parEmoji[ligne.emoji] = ligne; });
+
+    return UI.el('div', { class: 'tchat-reactions' }, EMOJIS.map(function (emoji) {
+      var info = parEmoji[emoji];
+      return UI.el('button', {
+        type: 'button',
+        class: 'tchat-reaction' + (info && info.moi ? ' is-active' : ''),
+        title: info && Number(info.total) ? info.total + ' réaction(s)' : 'Réagir',
+        'aria-label': 'Réagir ' + emoji,
+        onclick: function () { reagir(messageId, emoji); }
+      }, [
+        UI.el('span', { class: 'tchat-reaction-emoji', text: emoji }),
+        info && Number(info.total) > 0
+          ? UI.el('span', { class: 'tchat-reaction-n', text: String(info.total) })
+          : null
+      ]);
+    }));
+  }
+
   function bulle(message, auteur, mien, cible) {
     var heure = new Date(message.created_at).toLocaleTimeString('fr-FR', {
       hour: '2-digit',
@@ -754,29 +885,158 @@
       );
     }
 
-    var children = [
-      UI.el('div', { class: 'msg-meta' }, meta),
+    var children = [UI.el('div', { class: 'msg-meta' }, meta)];
+
+    if (message.reply_to) {
+      var cite = trouverMessage(message.reply_to);
+      children.push(UI.el('div', { class: 'tchat-cite' }, [
+        UI.el('span', { class: 'tchat-cite-qui', text: '↩︎ ' + (cite ? nomDe(cite.author_id) : 'message supprimé') }),
+        UI.el('span', { class: 'tchat-cite-txt', text: cite ? String(cite.body).slice(0, 90) : '—' })
+      ]));
+    }
+
+    children.push(
       UI.el('div', { class: 'msg-bubble' }, [UI.el('span', { class: 'tchat-corps', text: message.body })])
-    ];
+    );
+
+    if (!cible) children.push(rangeeReactions(message.id));
+
+    var actions = UI.el('div', { class: 'tchat-actions' });
+
+    if (!cible) {
+      actions.appendChild(UI.el('button', {
+        type: 'button',
+        class: 'tchat-action',
+        title: 'Répondre à ce message',
+        'aria-label': 'Répondre',
+        onclick: function () { repondre(message); }
+      }, [UI.icon('chat', { size: 13 })]));
+
+      if (estStaff()) {
+        actions.appendChild(UI.el('button', {
+          type: 'button',
+          class: 'tchat-action' + (message.pinned ? ' is-on' : ''),
+          title: message.pinned ? 'Décrocher ce message' : 'Épingler ce message',
+          'aria-label': 'Épingler',
+          onclick: function () { basculerEpingle(message); }
+        }, [UI.el('span', { text: '📌' })]));
+      }
+    }
 
     if (mien || estStaff()) {
-      children.push(
-        UI.el('button', {
-          type: 'button',
-          class: 'tchat-suppr',
-          title: 'Supprimer ce message',
-          'aria-label': 'Supprimer ce message',
-          onclick: function () {
-            supprimer(message.id, cible ? 'prive' : 'classe');
-          }
-        }, [UI.icon('trash', { size: 13 })])
-      );
+      actions.appendChild(UI.el('button', {
+        type: 'button',
+        class: 'tchat-suppr',
+        title: 'Supprimer ce message',
+        'aria-label': 'Supprimer ce message',
+        onclick: function () { supprimer(message.id, cible ? 'prive' : 'classe'); }
+      }, [UI.icon('trash', { size: 13 })]));
     }
+
+    if (actions.childNodes.length) children.push(actions);
 
     return UI.el('div', { class: 'msg' + (mien ? ' msg--mine' : '') + (message.pending ? ' msg--pending' : '') }, [
       UI.avatar(auteur, { size: 30 }),
       UI.el('div', { class: 'msg-col' }, children)
     ]);
+  }
+
+  function reagir(messageId, emoji) {
+    rpc('class_react', { p_message: messageId, p_emoji: emoji }).then(function (res) {
+      if (res.error) {
+        UI.err(messageErreur(res.error));
+        return;
+      }
+      charger(true);
+    });
+  }
+
+  function repondre(message) {
+    etat.reponse = message;
+    peindreReponse();
+    if (dom.champ) dom.champ.focus();
+  }
+
+  function basculerEpingle(message) {
+    rpc('class_chat_pin', { p_id: message.id, p_pinned: !message.pinned }).then(function (res) {
+      if (res.error) {
+        UI.err(messageErreur(res.error));
+        return;
+      }
+      UI.toast(message.pinned ? 'Message décroché.' : 'Message épinglé en haut du tchat.', 'ok');
+      charger(true);
+    });
+  }
+
+  function adoucir() {
+    var texte = String(dom.champ.value || '').trim();
+    if (!texte) { dom.champ.focus(); return; }
+    if (etat.envoi) return;
+
+    etat.envoi = true;
+    reglerBoutons(true);
+    dom.statut.textContent = 'Le filtre relit ton message…';
+
+    analyserAvecIA(texte)
+      .then(function (resultat) {
+        var version = resultat[etat.niveau] || resultat.doux || texte;
+        dom.champ.value = version;
+        dom.statut.textContent = resultat.flagged
+          ? 'Version adoucie proposée — tu peux la modifier ou l’envoyer telle quelle.'
+          : 'Rien à adoucir : ton message est déjà tout doux.';
+        if (resultat.flagged) {
+          UI.toast('Message réécrit en version « ' + NIVEAUX[etat.niveau].label + ' ».', 'info');
+        }
+      })
+      .then(function () {
+        etat.envoi = false;
+        reglerBoutons(false);
+        dom.champ.focus();
+      });
+  }
+
+  function peindreReponse() {
+    if (!dom.reponse) return;
+
+    if (!etat.reponse) {
+      dom.reponse.hidden = true;
+      UI.clear(dom.reponse);
+      return;
+    }
+
+    dom.reponse.hidden = false;
+    UI.clear(dom.reponse);
+    dom.reponse.appendChild(UI.el('span', { class: 'tchat-reponse-qui', text: '↩︎ ' + nomDe(etat.reponse.author_id) }));
+    dom.reponse.appendChild(UI.el('span', { class: 'tchat-reponse-txt', text: String(etat.reponse.body).slice(0, 90) }));
+    dom.reponse.appendChild(UI.el('button', {
+      type: 'button',
+      class: 'icon-btn tchat-reponse-x',
+      'aria-label': 'Annuler la réponse',
+      onclick: function () { etat.reponse = null; peindreReponse(); }
+    }, [UI.icon('x', { size: 13 })]));
+  }
+
+  function peindreEpingles() {
+    if (!dom.epingles) return;
+
+    var epingles = etat.messages.filter(function (m) { return m.pinned; });
+
+    if (!epingles.length) {
+      dom.epingles.hidden = true;
+      UI.clear(dom.epingles);
+      return;
+    }
+
+    dom.epingles.hidden = false;
+    UI.clear(dom.epingles);
+    dom.epingles.appendChild(UI.el('span', { class: 'tchat-epingles-titre', text: '📌 Épinglé' }));
+
+    epingles.slice(-2).forEach(function (message) {
+      dom.epingles.appendChild(UI.el('span', { class: 'tchat-epingles-item' }, [
+        UI.el('b', { text: nomDe(message.author_id) + ' : ' }),
+        UI.el('span', { text: String(message.body).slice(0, 110) })
+      ]));
+    });
   }
 
   function peindrePrives() {
@@ -969,6 +1229,35 @@
       })
     ]));
 
+    var climat = etat.climat;
+    if (climat && typeof climat.score === 'number') {
+      var tonClimat = climat.score >= 80 ? 'très serein'
+        : climat.score >= 60 ? 'correct'
+        : climat.score >= 40 ? 'tendu' : 'difficile';
+
+      hote.appendChild(UI.el('div', { class: 'climat' }, [
+        UI.el('div', { class: 'climat-tete' }, [
+          UI.el('b', { text: 'Climat de classe : ' + climat.score + '/100' }),
+          UI.el('span', { class: 'faint', text: ' · ' + tonClimat })
+        ]),
+        UI.el('div', { class: 'climat-jauge' }, [
+          UI.el('span', { class: 'climat-fill', style: { width: Math.max(2, climat.score) + '%' } })
+        ]),
+        UI.el('p', { class: 'sub climat-resume', text: resumeSemaine(climat) })
+      ]));
+
+      if (estStaff() && Number(climat.nb_paires) > 0) {
+        hote.appendChild(UI.el('div', { class: 'tchat-alerte' }, [
+          UI.el('b', { text: '⚠️ Harcèlement répété' }),
+          UI.el('span', {
+            text: ' : ' + climat.paires.map(function (paire) {
+              return paire.a + ' → ' + paire.b + ' (' + paire.n + ' fois)';
+            }).join(' · ')
+          })
+        ]));
+      }
+    }
+
     hote.appendChild(UI.el('div', { class: 'tchat-chiffres' }, [
       chiffre(total, 'détections au total'),
       chiffre(jour, 'sur les dernières 24 h'),
@@ -1129,7 +1418,11 @@
       p_source: analyse && analyse.source ? analyse.source : null
     };
 
-    if (cible) enveloppe.p_to = cible;
+    if (cible) {
+      enveloppe.p_to = cible;
+    } else if (etat.reponse) {
+      enveloppe.p_reply_to = etat.reponse.id;
+    }
 
     var appel = cible ? rpc('private_send', enveloppe) : rpc('class_chat_send', enveloppe);
 
@@ -1155,6 +1448,7 @@
         );
       }
 
+      etat.reponse = null;
       return charger(true);
     });
   }

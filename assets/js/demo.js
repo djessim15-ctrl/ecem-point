@@ -236,6 +236,7 @@
   ];
 
   /* Messages privés de démonstration (dont un signalé par le filtre). */
+  var reactions = [];
   var privateMessages = [
     {
       id: 801, sender_id: 'demo-eleve-2', recipient_id: 'demo-eleve',
@@ -273,6 +274,9 @@
 
   var settings = {
     id: 1,
+    golden_until: null,
+    golden_multiplier: 2,
+    compliment_force: false,
     suppleant_can_award: true,
     award_min: 1,
     award_max: 4,
@@ -466,6 +470,8 @@
         categories: args.p_categories || [],
         severity: args.p_severity || 0,
         source: args.p_source || null,
+        reply_to: args.p_reply_to || null,
+        pinned: false,
         created_at: new Date().toISOString()
       };
       classMessages.push(row);
@@ -590,6 +596,82 @@
             created_at: m.created_at
           };
         });
+    },
+    cancel_event: function (args) {
+      for (var i = 0; i < events.length; i++) {
+        if (events[i].id === args.p_event) { events.splice(i, 1); return { annule: true }; }
+      }
+      fail('INTROUVABLE');
+    },
+    start_golden: function () {
+      settings.golden_until = new Date(Date.now() + 30 * 60000).toISOString();
+      return settings.golden_until;
+    },
+    stop_golden: function () { settings.golden_until = null; },
+    set_compliment: function (args) { settings.compliment_force = !!args.p_on; return settings.compliment_force; },
+    wheel_state: function () {
+      return { deja: db.wheelDone || false, dernier: db.wheelGain || null };
+    },
+    wheel_spin: function () {
+      if (db.wheelDone) fail('DEJA_TOURNE');
+      var gain = [1, 2, 3, 5][Math.floor(Math.random() * 4)];
+      db.wheelDone = true;
+      db.wheelGain = gain;
+      var moi = byId(db.meId);
+      if (moi) { moi.points += gain; touchProfile(moi); }
+      return { gain: gain };
+    },
+    class_react: function (args) {
+      var cle = String(args.p_message) + '|' + args.p_emoji;
+      var index = -1;
+      for (var i = 0; i < reactions.length; i++) if (reactions[i].cle === cle && reactions[i].user_id === db.meId) index = i;
+      if (index >= 0) reactions.splice(index, 1);
+      else reactions.push({ cle: cle, message_id: args.p_message, emoji: args.p_emoji, user_id: db.meId });
+    },
+    class_reactions_feed: function () {
+      var map = {};
+      reactions.forEach(function (r) {
+        var cle = r.message_id + '|' + r.emoji;
+        if (!map[cle]) map[cle] = { message_id: r.message_id, emoji: r.emoji, total: 0, moi: false };
+        map[cle].total += 1;
+        if (r.user_id === db.meId) map[cle].moi = true;
+      });
+      return Object.keys(map).map(function (k) { return map[k]; });
+    },
+    class_chat_pin: function (args) {
+      if (getRole() === 'eleve') fail('INTERDIT');
+      for (var i = 0; i < classMessages.length; i++) {
+        if (String(classMessages[i].id) === String(args.p_id)) {
+          classMessages[i].pinned = args.p_pinned !== false;
+          return true;
+        }
+      }
+      return false;
+    },
+    class_climate: function () {
+      var semaine = classMessages.filter(function (m) {
+        return Date.now() - new Date(m.created_at).getTime() < 7 * 86400000;
+      });
+      var drapeaux = semaine.filter(function (m) { return m.flagged; });
+      var paires = [];
+      var compte = {};
+      privateMessages.forEach(function (m) {
+        if (!m.flagged) return;
+        var cle = m.sender_id + '|' + m.recipient_id;
+        compte[cle] = (compte[cle] || 0) + 1;
+      });
+      Object.keys(compte).forEach(function (cle) {
+        if (compte[cle] >= 3) {
+          var morceaux = cle.split('|');
+          var a = byId(morceaux[0]);
+          var b = byId(morceaux[1]);
+          paires.push({ a: a ? a.prenom : '?', b: b ? b.prenom : '?', n: compte[cle] });
+        }
+      });
+      var score = semaine.length
+        ? Math.max(0, Math.min(100, Math.round(100 * (1 - drapeaux.length / semaine.length)) - 5 * paires.length))
+        : 100;
+      return { score: score, messages_7j: semaine.length, drapeaux_7j: drapeaux.length, paires: paires, nb_paires: paires.length };
     },
     my_role: function () { return getRole(); },
     is_staff: function () { return getRole() !== 'eleve'; },
