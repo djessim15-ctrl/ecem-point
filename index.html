@@ -142,6 +142,9 @@
               aria-selected="false" aria-controls="form-signup">Inscription</button>
     </div>
 
+    <!-- État de la base de données (masqué si tout va bien) -->
+    <div id="backend-alert" class="is-hidden" aria-live="polite"></div>
+
     <!-- ---------------- Connexion ---------------- -->
     <form id="form-login" class="auth-form" novalidate>
       <div class="field">
@@ -272,6 +275,7 @@
 
 <script src="assets/vendor/supabase.js"></script>
 <script src="assets/js/config.js"></script>
+<script src="assets/js/health.js"></script>
 <script src="assets/js/theme.js"></script>
 <script src="assets/js/icons.js"></script>
 <script src="assets/js/ui.js"></script>

@@ -24,6 +24,7 @@
   var Store = window.ECEM.Store;
   var cfg = window.ECEM.cfg || {};
   var sb = window.ECEM.sb;
+  var Health = window.ECEM.Health;
 
   if (!UI || !Store || !sb) return;
 
@@ -127,6 +128,25 @@
   function boot() {
     setBootText('Connexion à ta classe…');
 
+    /* En démo, aucune requête réseau : on ouvre directement. Sinon, on prend
+     * le pouls de la base avant de charger quoi que ce soit, pour pouvoir
+     * afficher un diagnostic utile plutôt qu'une erreur de réseau brute. */
+    var preflight =
+      !window.ECEM.demo && Health
+        ? Health.check().catch(function () { return { status: 'ok' }; })
+        : Promise.resolve({ status: 'ok' });
+
+    preflight.then(function (pulse) {
+      if (pulse && pulse.status && pulse.status !== 'ok' && Health) {
+        var info = Health.message(pulse.status);
+        fatal(info.title + ' — ' + info.text);
+        return;
+      }
+      startSession();
+    });
+  }
+
+  function startSession() {
     Store.init()
       .then(function () {
         setBootText('Chargement des points…');
@@ -152,7 +172,8 @@
           });
           return;
         }
-        fatal(UI.humanError(error));
+        var explained = Health ? Health.explain(error) : '';
+        fatal(explained || UI.humanError(error));
       });
   }
 
@@ -177,24 +198,43 @@
   function fatal(message) {
     if (dom.boot) dom.boot.classList.add('is-hidden');
     dom.main.innerHTML = '';
+
+    var down = Health && Health.isDown();
+    var actions = [
+      UI.el('button', {
+        type: 'button', class: 'btn btn-primary', text: 'Réessayer',
+        onclick: function () { window.location.reload(); }
+      }),
+      UI.el('button', {
+        type: 'button', class: 'btn btn-ghost', text: 'Retour à la connexion',
+        onclick: function () { window.location.href = 'index.html'; }
+      }),
+      UI.el('button', {
+        type: 'button', class: 'btn btn-soft', text: 'Voir la démo',
+        onclick: function () { window.location.href = 'app.html?demo=1'; }
+      })
+    ];
+
+    if (down) {
+      actions.push(
+        UI.el('button', {
+          type: 'button', class: 'btn btn-ghost', text: 'Diagnostic',
+          onclick: function () { Health.diagnose(); }
+        })
+      );
+      actions.push(
+        UI.el('a', {
+          class: 'btn btn-ghost', href: Health.dashboardUrl(),
+          target: '_blank', rel: 'noopener'
+        }, [UI.icon('arrow-up-right', { size: 16 }), UI.el('span', { text: 'Ouvrir Supabase' })])
+      );
+    }
+
     dom.main.appendChild(UI.el('div', { class: 'empty', style: { marginTop: '40px' } }, [
       UI.el('span', { class: 'empty-ico' }, [UI.icon('alert', { size: 26 })]),
       UI.el('div', { class: 'empty-title', text: 'Impossible d’ouvrir la classe' }),
       UI.el('div', { class: 'empty-text', text: message }),
-      UI.el('div', { class: 'row', style: { marginTop: '10px' } }, [
-        UI.el('button', {
-          type: 'button', class: 'btn btn-primary', text: 'Réessayer',
-          onclick: function () { window.location.reload(); }
-        }),
-        UI.el('button', {
-          type: 'button', class: 'btn btn-ghost', text: 'Retour à la connexion',
-          onclick: function () { window.location.href = 'index.html'; }
-        }),
-        UI.el('button', {
-          type: 'button', class: 'btn btn-soft', text: 'Voir la démo',
-          onclick: function () { window.location.href = 'app.html?demo=1'; }
-        })
-      ])
+      UI.el('div', { class: 'row', style: { marginTop: '10px' } }, actions)
     ]));
   }
 

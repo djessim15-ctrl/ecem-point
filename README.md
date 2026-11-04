@@ -52,6 +52,7 @@ python3 -m http.server 8080
 | **Mode démo** | `app.html?demo=1` | classe fictive en mémoire, bascule élève / suppléant / délégué |
 | **Installation PWA** | navigateur | manifeste, icônes, service worker (coquille hors ligne) |
 | **Hors ligne & erreurs** | global | indicateur de connexion, messages clairs, bouton « Réessayer » |
+| **Diagnostic de connexion** | bandeau / écran d’erreur | test de la base, cause probable, lien « Ouvrir Supabase », voir § 0 bis |
 
 ### Corrections
 - Les **délégués et suppléants n’apparaissent plus dans le classement** (ils
@@ -66,6 +67,38 @@ python3 -m http.server 8080
 - Les **timestamps** et la date de membre sont formatés en français partout.
 - Le **pied de page** fixe ne recouvre plus le contenu sur mobile.
 - Les champs de saisie ne sont plus écrasés par les mises à jour temps réel.
+
+---
+
+## 0 bis. « La base de données ne répond pas » — que faire ?
+
+Un projet Supabase **gratuit se met en pause** tout seul après environ une
+semaine sans aucune visite. Pendant la pause, son adresse ne répond plus :
+le site affiche alors un bandeau orange **« La base de données ne répond pas »**
+(et non plus « Vérifie ton réseau », qui n’aidait pas).
+
+**Rien n’est perdu** : les comptes, les points et l’historique restent dans la
+base. Il suffit de réveiller le projet.
+
+1. Ouvrir le tableau de bord du projet :
+   <https://supabase.com/dashboard/project/qrpblycsztdelikvurah>
+2. Cliquer sur **Restore project** (ou **Restaurer**) et attendre 1 à 3 minutes.
+3. Recharger le site. C’est reparti.
+
+Depuis le site, le bouton **Diagnostic** (bandeau de connexion, ou écran
+d’erreur de l’application) affiche l’adresse testée, l’état de la clé, la
+latence, et propose **Ouvrir Supabase** + **Réessayer**.
+
+| Symptôme du diagnostic | Cause | Solution |
+|---|---|---|
+| `Serveur injoignable` | projet en pause ou supprimé | restaurer le projet (ci-dessus) |
+| `Clé refusée` | clé `anon` régénérée | recopier la clé dans `assets/js/config.js` |
+| `Tables absentes` | migrations non jouées | rejouer `supabase/migrations/0001…0005` |
+| `Navigateur hors ligne` | Wi-Fi / réseau de l’appareil | se reconnecter, puis « Réessayer » |
+
+> Pour changer de projet Supabase : remplacer `SUPABASE_URL` et
+> `SUPABASE_ANON_KEY` dans `assets/js/config.js`, puis redéployer. Le reste du
+> site (et le mode démo) continue de fonctionner sans modification.
 
 ---
 

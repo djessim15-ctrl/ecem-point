@@ -656,6 +656,37 @@ textarea { resize: vertical; min-height: 96px; line-height: 1.5; }
 .alert--error { background: var(--red-soft); border-color: rgba(229, 72, 77, .25); color: var(--red); }
 .alert--info  { background: var(--blue-soft); border-color: rgba(47, 125, 225, .25); color: var(--blue); }
 .alert--ok    { background: var(--green-soft); border-color: rgba(16, 165, 106, .25); color: var(--green); }
+.alert--warn  { background: var(--gold-soft); border-color: rgba(233, 162, 24, .32); color: var(--gold); }
+
+.alert-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.alert-title { font-size: .9rem; line-height: 1.35; }
+.alert-text { font-size: .84rem; line-height: 1.5; color: var(--text-soft); }
+.alert-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
+.alert-actions .btn { height: 32px; padding: 0 12px; font-size: .79rem; }
+.alert-actions .btn .ico { width: 15px; height: 15px; }
+
+/* Diagnostic de connexion (fenêtre) */
+.diag {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.diag-row {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 14px; padding: 9px 13px; font-size: .83rem;
+}
+.diag-row + .diag-row { border-top: 1px solid var(--border); }
+.diag-key { color: var(--text-soft); flex: none; }
+.diag-val { font-weight: 600; text-align: right; word-break: break-word; }
+.diag-val.is-ok { color: var(--green); }
+.diag-val.is-bad { color: var(--red); }
+.diag-text { margin-top: 14px; font-size: .87rem; color: var(--text-soft); line-height: 1.55; }
+.diag-steps {
+  margin: 10px 0 0 18px; padding: 0;
+  font-size: .85rem; color: var(--text-soft); line-height: 1.6;
+  display: grid; gap: 4px;
+}
 
 /* --------------------------------------------------------------------------
  * 7. Surfaces

@@ -24,6 +24,7 @@
   var UI = window.ECEM && window.ECEM.UI;
   var sb = window.ECEM && window.ECEM.sb;
   var Theme = window.ECEM && window.ECEM.Theme;
+  var Health = window.ECEM && window.ECEM.Health;
 
   if (!sb || !UI) return;
 
@@ -55,6 +56,7 @@
       btnDemo: UI.$('#btn-demo'),
       btnHelp: UI.$('#btn-help'),
       alert: UI.$('#auth-alert'),
+      backendAlert: UI.$('#backend-alert'),
       status: UI.$('#auth-status'),
       themeBtn: UI.$('#btn-theme')
     };
@@ -71,7 +73,36 @@
 
     if (dom.loginPrenom) dom.loginPrenom.focus({ preventScroll: true });
 
+    checkBackend();
     restoreSession();
+  }
+
+  /* -------------------------------------------------------------------------
+   * Santé de la base : le bandeau n'apparaît que si quelque chose cloche
+   * ---------------------------------------------------------------------- */
+  function checkBackend() {
+    if (!Health) return;
+    Health.onChange(paintBackend);
+    Health.check().then(paintBackend);
+  }
+
+  function paintBackend(state) {
+    if (!dom.backendAlert) return;
+    if (state.status === 'ok') {
+      dom.backendAlert.classList.add('is-hidden');
+      UI.clear(dom.backendAlert);
+      return;
+    }
+    Health.renderNotice(dom.backendAlert, { demo: true });
+  }
+
+  /* Message d'erreur : le diagnostic réseau affine celui de UI.humanError. */
+  function errorText(err) {
+    if (Health) {
+      var explained = Health.explain(err);
+      if (explained) return explained;
+    }
+    return UI.humanError(err);
   }
 
   function hydrateIcons() {
@@ -118,7 +149,7 @@
         });
     }).catch(function (err) {
       setStatus('');
-      showAlert(UI.humanError(err), 'error');
+      showAlert(errorText(err), 'error');
       sb.auth.signOut();
     });
   }
@@ -392,7 +423,7 @@
       })
       .catch(function (err) {
         setBusy(dom.btnLogin, false, 'Se connecter');
-        showAlert(UI.humanError(err), 'error');
+        showAlert(errorText(err), 'error');
         if (window.ECEM.FX) window.ECEM.FX.sound('error');
         dom.loginPassword.select();
       });
@@ -488,7 +519,7 @@
       })
       .catch(function (err) {
         setBusy(dom.btnSignup, false, recoveryMode ? 'Terminer mon inscription' : 'Créer mon compte');
-        var message = UI.humanError(err);
+        var message = errorText(err);
 
         /* L'activation a échoué : on rend le code disponible tout de suite. */
         if (token) {
