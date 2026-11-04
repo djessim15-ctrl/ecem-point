@@ -6,6 +6,100 @@ Un mini-site (HTML / CSS / JavaScript pur, sans framework, sans étape de build)
 adossé à **Supabase** : les comptes, les points, l’historique et le tchat vivent
 dans une base PostgreSQL, et les écrans se mettent à jour en temps réel.
 
+> **Version 2** — refonte complète de l’interface (design system clair/sombre,
+> polices locales, icônes SVG), nouvelles pages **Statistiques**, **Succès** et
+> **Profil**, mode **démo** sans compte, application **installable** (PWA),
+> palette de commandes, confettis… Voir le détail au § 0.
+
+```bash
+# pour visiter tout de suite, sans compte :
+python3 -m http.server 8080
+# http://localhost:8080/app.html?demo=1
+```
+
+---
+
+## 0. Nouveautés de la version 2
+
+### Design
+- **Design system complet** : jetons de couleurs, rayons, ombres, typographies
+  variables **Inter** et **Plus Jakarta Sans** servies localement (aucun CDN).
+- **Thème clair / sombre / auto**, mémorisé par appareil, appliqué avant le
+  premier rendu (pas de flash blanc) et synchronisé avec la barre du navigateur.
+- **Barre latérale** sur ordinateur, **barre inférieure + bouton flottant** sur
+  mobile, surfaces en verre, dégradés « aurore » et grain discret.
+- **Icônes SVG** maison (plus d’emojis structurels), avatars colorés de façon
+  stable, squelettes et états vides soignés, animations respectant
+  `prefers-reduced-motion`.
+- Page de connexion repensée : argumentaire, aperçu animé, FAQ intégrée et
+  **accès direct à la démo**.
+
+### Fonctionnalités ajoutées
+| Nouveauté | Où | Ce que ça fait |
+|---|---|---|
+| **Tableau de bord** | Accueil | solde animé, rang, semaine, objectif, activité récente, tête de classe |
+| **Statistiques** | Statistiques | gains/retraits sur 7 jours, répartition, top donneurs et receveurs, activité horaire |
+| **Succès** | Succès | 10 à 12 badges calculés depuis l’historique, avec progression |
+| **Profil & réglages** | Profil | thème, sons, animations, notifications, changement de mot de passe, export, lien de classe |
+| **Classement par période** | Classement | « depuis toujours » ou « 7 derniers jours », recherche, barre de progression |
+| **Fiche élève** | Classement, listes | points, rang, historique personnel, actions rapides |
+| **Notifications** | cloche | dernières activités, compteur de nouveautés |
+| **Palette de commandes** | `Ctrl/⌘ + K` | naviguer, chercher un élève, lancer une action au clavier |
+| **Export CSV** | Historique, Profil | téléchargement de l’historique (compatible Excel) |
+| **Recherche insensible aux accents** | toutes les listes | « ines » trouve « Inès » |
+| **Tchat amélioré** | Tchat | envoi optimiste, séparateurs de jours, avatars, sélecteur d’emoji, Entrée pour envoyer |
+| **Confettis, sons, vibrations** | partout | retours immédiats, désactivables dans le profil |
+| **Mode démo** | `app.html?demo=1` | classe fictive en mémoire, bascule élève / suppléant / délégué |
+| **Installation PWA** | navigateur | manifeste, icônes, service worker (coquille hors ligne) |
+| **Hors ligne & erreurs** | global | indicateur de connexion, messages clairs, bouton « Réessayer » |
+| **Diagnostic de connexion** | bandeau / écran d’erreur | test de la base, cause probable, lien « Ouvrir Supabase », voir § 0 bis |
+
+### Corrections
+- Les **délégués et suppléants n’apparaissent plus dans le classement** (ils
+  n’ont pas de solde : seuls les élèves sont classés).
+- La **présence** est recalculée à partir de `last_seen_at` au lieu d’être
+  affichée « connecté » en dur sur son propre compte.
+- Les **recherches** ne perdent plus la saisie en cours lors d’un rafraîchissement
+  temps réel (les brouillons de montant sont conservés).
+- Le **retrait** affiche le montant réellement retiré (borné par le solde).
+- **Fins de session** et comptes non activés redirigés proprement avec un message.
+- Les **erreurs réseau** ne laissent plus d’écran vide : message + réessai.
+- Les **timestamps** et la date de membre sont formatés en français partout.
+- Le **pied de page** fixe ne recouvre plus le contenu sur mobile.
+- Les champs de saisie ne sont plus écrasés par les mises à jour temps réel.
+
+---
+
+## 0 bis. « La base de données ne répond pas » — que faire ?
+
+Un projet Supabase **gratuit se met en pause** tout seul après environ une
+semaine sans aucune visite. Pendant la pause, son adresse ne répond plus :
+le site affiche alors un bandeau orange **« La base de données ne répond pas »**
+(et non plus « Vérifie ton réseau », qui n’aidait pas).
+
+**Rien n’est perdu** : les comptes, les points et l’historique restent dans la
+base. Il suffit de réveiller le projet.
+
+1. Ouvrir le tableau de bord du projet :
+   <https://supabase.com/dashboard/project/qrpblycsztdelikvurah>
+2. Cliquer sur **Restore project** (ou **Restaurer**) et attendre 1 à 3 minutes.
+3. Recharger le site. C’est reparti.
+
+Depuis le site, le bouton **Diagnostic** (bandeau de connexion, ou écran
+d’erreur de l’application) affiche l’adresse testée, l’état de la clé, la
+latence, et propose **Ouvrir Supabase** + **Réessayer**.
+
+| Symptôme du diagnostic | Cause | Solution |
+|---|---|---|
+| `Serveur injoignable` | projet en pause ou supprimé | restaurer le projet (ci-dessus) |
+| `Clé refusée` | clé `anon` régénérée | recopier la clé dans `assets/js/config.js` |
+| `Tables absentes` | migrations non jouées | rejouer `supabase/migrations/0001…0005` |
+| `Navigateur hors ligne` | Wi-Fi / réseau de l’appareil | se reconnecter, puis « Réessayer » |
+
+> Pour changer de projet Supabase : remplacer `SUPABASE_URL` et
+> `SUPABASE_ANON_KEY` dans `assets/js/config.js`, puis redéployer. Le reste du
+> site (et le mode démo) continue de fonctionner sans modification.
+
 ---
 
 ## 1. Le principe
@@ -88,19 +182,31 @@ python3 -m http.server 8080
 
 ```
 ecem-point/
-├── index.html                     Connexion + inscription (3 rôles)
-├── app.html                       L’application (onglets selon le rôle)
+├── index.html                     Connexion + inscription (3 rôles) + démo
+├── app.html                       L’application (sections selon le rôle)
+├── manifest.webmanifest           Application installable (nom, icônes, raccourcis)
+├── sw.js                          Service worker : coquille en cache, hors ligne
 ├── README.md                      Ce document
 ├── .gitignore
 ├── assets/
 │   ├── css/
-│   │   └── style.css              Toute l’apparence (une seule feuille)
+│   │   └── style.css              Design system complet (clair + sombre)
+│   ├── fonts/                     Inter + Plus Jakarta Sans (WOFF2, licences OFL)
+│   ├── icons/                     Icône de l’application (SVG, maskable)
 │   ├── js/
 │   │   ├── config.js              URL + clé anon Supabase, réglages du site
-│   │   ├── db.js                  Création du client Supabase
-│   │   ├── ui.js                  Helpers DOM, dates FR, toasts, erreurs
+│   │   ├── theme.js               Thème clair/sombre/auto + préférences locales
+│   │   ├── icons.js               Jeu d’icônes SVG (aucune dépendance)
+│   │   ├── ui.js                  Helpers DOM, dates FR, toasts, modales, erreurs
+│   │   ├── fx.js                  Confettis, compteurs animés, sons, vibrations
+│   │   ├── charts.js              Graphiques SVG (courbe, barres, anneau, heatmap)
+│   │   ├── insights.js            Statistiques et succès calculés depuis l’historique
+│   │   ├── demo.js                Faux client Supabase en mémoire (mode démo)
+│   │   ├── db.js                  Création du client Supabase (ou client démo)
+│   │   ├── data.js                Store : chargement, temps réel, actions RPC
 │   │   ├── auth.js                Logique de index.html
-│   │   └── app.js                 Logique de app.html
+│   │   ├── app.js                 Logique de app.html (toutes les vues)
+│   │   └── pwa.js                 Service worker + proposition d’installation
 │   └── vendor/
 │       └── supabase.js            Librairie Supabase v2 (build UMD, vendue
 │                                  avec le repo : aucune dépendance à un CDN)
@@ -113,6 +219,54 @@ ecem-point/
     │   └── 0005_release_code.sql  Libération d’une réservation de code
     └── seed-codes.example.sql     Modèle d’insertion des codes secrets
 ```
+
+> **Aucune migration supplémentaire n’est nécessaire pour la version 2** :
+> les nouvelles pages lisent les tables existantes (`profiles`, `point_events`,
+> `staff_messages`, `app_settings`) et continuent de passer par les mêmes
+> fonctions RPC. Les statistiques et les succès sont calculés dans le navigateur
+> à partir de ce que la RLS laisse voir au compte connecté.
+
+---
+
+## 4 bis. Mode démo, raccourcis, installation
+
+### Visiter sans compte
+
+`app.html?demo=1` charge la même interface avec un **faux client Supabase en
+mémoire** (`assets/js/demo.js`) : 18 élèves fictifs, un journal de 7 jours, un
+tchat, des statistiques. Le bandeau en haut de page permet de changer de rôle
+(élève / délégué / suppléant) et de quitter la démo. Rien ne part sur le réseau
+et rien n’est écrit en base ; un rechargement remet les données à zéro.
+
+Depuis la page de connexion, le bouton **Explorer la démo** propose les trois
+rôles. La démo est totalement inerte quand l’URL ne contient pas `?demo=1`.
+
+### Raccourcis clavier
+
+| Touche | Action |
+|---|---|
+| `Ctrl` / `⌘` + `K` | palette de commandes (navigation, élèves, actions) |
+| `/` | aller au champ de recherche de la section courante |
+| `↑` `↓` puis `Entrée` | naviguer dans la palette |
+| `Entrée` | envoyer un message dans le tchat (`Maj+Entrée` = retour à la ligne) |
+| `Échap` | fermer une fenêtre, la palette ou le menu mobile |
+
+### Installer l’application (PWA)
+
+Le site embarque un `manifest.webmanifest` et un `sw.js`. Sur Chrome / Edge /
+Android, une pastille « Installer ECEM Point » apparaît quand le navigateur le
+permet ; sur iOS, *Partager → Sur l’écran d’accueil*. Le service worker met en
+cache la coquille (HTML, CSS, JS, polices) : l’interface s’ouvre instantanément
+et reste consultable hors ligne — les requêtes vers Supabase ne sont jamais
+mises en cache, les points restent donc toujours à jour.
+
+### Accessibilité
+
+- navigation complète au clavier, focus visible, `aria-current` sur l’onglet actif ;
+- lien d’évitement (« Aller au contenu »), libellés `aria-label` sur les icônes ;
+- fenêtres modales avec piège à focus et fermeture par `Échap` ;
+- respect de `prefers-reduced-motion` (confettis, transitions et compteurs) ;
+- contraste vérifié dans les deux thèmes, tailles de texte relatives.
 
 ---
 

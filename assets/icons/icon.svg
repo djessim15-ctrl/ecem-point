@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="ECEM Point">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6d4aff"/>
+      <stop offset="0.55" stop-color="#8b5cf6"/>
+      <stop offset="1" stop-color="#d946ef"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.25" cy="0.15" r="0.9">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="star" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffe9b3"/>
+      <stop offset="1" stop-color="#f7c65a"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="116" fill="url(#glow)"/>
+  <path d="M256 92l42.6 91.5 100.4 13.1-73.2 69.4 18.2 97.8L256 318.6l-88 45.2 18.2-97.8-73.2-69.4 100.4-13.1z"
+        fill="url(#star)" stroke="#fff6dd" stroke-width="6" stroke-linejoin="round"/>
+  <circle cx="381" cy="131" r="23" fill="#ffffff" opacity="0.35"/>
+  <circle cx="138" cy="368" r="15" fill="#ffffff" opacity="0.28"/>
+</svg>
