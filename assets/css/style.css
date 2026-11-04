@@ -2391,3 +2391,157 @@ textarea { resize: vertical; min-height: 96px; line-height: 1.5; }
 @media (max-width: 640px) {
   .pwa-chip { bottom: 88px; left: 12px; right: 12px; }
 }
+
+/* ============================================================================
+ * Tchat de classe — filtre de gentillesse
+ * ==========================================================================*/
+.tchat { display: grid; gap: 16px; }
+
+.tchat-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 18px; flex-wrap: wrap;
+}
+.tchat-head-txt { display: grid; gap: 4px; min-width: 240px; }
+.tchat-outils { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* Interrupteur du filtre ------------------------------------------------ */
+.tchat-switch {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 7px 13px 7px 8px;
+  border: 1px solid var(--border); border-radius: var(--radius-full);
+  background: var(--surface); color: var(--text-soft);
+  font-size: .84rem; font-weight: 650; cursor: pointer;
+  transition: border-color .2s var(--ease), background .2s var(--ease), color .2s var(--ease);
+}
+.tchat-switch:hover { border-color: var(--border-strong); color: var(--text); }
+.tchat-switch-rail {
+  position: relative; width: 38px; height: 21px; border-radius: 99px;
+  background: var(--accent); flex: none; transition: background .2s var(--ease);
+}
+.tchat-switch-knob {
+  position: absolute; top: 3px; left: 20px; width: 15px; height: 15px;
+  border-radius: 50%; background: #fff; transition: left .2s var(--ease);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
+}
+.tchat-switch.is-off .tchat-switch-rail { background: var(--border-strong); }
+.tchat-switch.is-off .tchat-switch-knob { left: 3px; }
+.tchat-switch.is-off { color: var(--text-faint); }
+
+/* Sélecteur de niveau --------------------------------------------------- */
+.tchat-seg {
+  display: inline-flex; padding: 3px; gap: 2px;
+  border: 1px solid var(--border); border-radius: var(--radius-full);
+  background: var(--surface-2, var(--surface));
+}
+.tchat-seg-btn {
+  border: 0; background: transparent; color: var(--text-soft);
+  padding: 5px 12px; border-radius: var(--radius-full);
+  font-size: .8rem; font-weight: 700; cursor: pointer;
+  transition: background .18s var(--ease), color .18s var(--ease);
+}
+.tchat-seg-btn:hover:not(:disabled) { color: var(--text); }
+.tchat-seg-btn.is-active {
+  background: var(--accent); color: #fff;
+  box-shadow: 0 6px 16px -10px var(--accent);
+}
+.tchat-seg-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* Panneau des détections ------------------------------------------------ */
+.tchat-stats {
+  display: grid; gap: 14px;
+  padding: 18px; border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--surface);
+}
+.tchat-stats-head { display: grid; gap: 2px; }
+.tchat-stats-head h3 { font-size: 1rem; }
+
+.tchat-chiffres { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.tchat-chiffre {
+  display: grid; gap: 2px; padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-2, var(--surface));
+}
+.tchat-chiffre b { font-size: 1.4rem; font-family: var(--font-display); line-height: 1; }
+.tchat-chiffre span { font-size: .76rem; color: var(--text-faint); }
+
+.tchat-cats { display: grid; gap: 8px; }
+.tchat-cat { display: grid; grid-template-columns: 150px 1fr 32px; align-items: center; gap: 10px; }
+.tchat-cat-nom { font-size: .8rem; color: var(--text-soft); }
+.tchat-cat-bar {
+  height: 8px; border-radius: 99px; background: var(--border);
+  overflow: hidden;
+}
+.tchat-cat-fill {
+  display: block; height: 100%; border-radius: 99px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+}
+.tchat-cat-n { font-size: .78rem; text-align: right; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+
+.tchat-journal { display: grid; gap: 6px; max-height: 260px; overflow: auto; }
+.tchat-journal li {
+  display: grid; grid-template-columns: 90px 1fr auto auto;
+  align-items: center; gap: 10px;
+  padding: 8px 12px; border-radius: var(--radius-xs, 8px);
+  background: var(--surface-2, var(--surface));
+  font-size: .8rem;
+}
+.tchat-journal-qui { font-weight: 700; }
+.tchat-journal-quoi { color: var(--text-soft); }
+.tchat-journal-quand { color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.tchat-journal-src {
+  font-size: .68rem; font-weight: 800; letter-spacing: .04em;
+  padding: 2px 7px; border-radius: 99px;
+  background: var(--accent-soft); color: var(--accent);
+}
+
+/* Messages -------------------------------------------------------------- */
+.tchat-log { min-height: 220px; }
+.tchat-corps { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.tchat-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: .66rem; font-weight: 800; letter-spacing: .02em;
+  padding: 2px 8px; border-radius: 99px;
+  background: rgba(233, 162, 24, .16); color: var(--gold, #b4780a);
+}
+
+.tchat-original-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 0; background: none; padding: 0; cursor: pointer;
+  color: var(--text-faint); font-size: .72rem; font-weight: 650;
+}
+.tchat-original-btn:hover { color: var(--accent); }
+
+.tchat-original {
+  margin-top: 2px; padding: 8px 11px;
+  border-left: 3px solid var(--border-strong);
+  border-radius: 6px; background: var(--surface-2, var(--surface));
+  color: var(--text-soft); font-size: .8rem; font-style: italic;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+
+.tchat-suppr {
+  align-self: flex-start;
+  border: 0; background: none; padding: 2px; cursor: pointer;
+  color: var(--text-faint); opacity: .55;
+  transition: color .18s var(--ease), opacity .18s var(--ease);
+}
+.tchat-suppr:hover { color: var(--red, #e5484d); opacity: 1; }
+
+.tchat-vide {
+  display: grid; place-items: center; gap: 6px;
+  padding: 44px 20px; text-align: center; color: var(--text-faint);
+}
+.tchat-vide-titre { font-weight: 750; color: var(--text-soft); font-size: .95rem; }
+.tchat-vide-texte { font-size: .84rem; max-width: 340px; }
+
+.tchat-statut { font-size: .8rem; color: var(--text-faint); min-height: 1.1em; margin: 0; }
+
+@media (max-width: 720px) {
+  .tchat-head { gap: 12px; }
+  .tchat-outils { width: 100%; justify-content: space-between; }
+  .tchat-switch-text { font-size: .8rem; }
+  .tchat-cat { grid-template-columns: 108px 1fr 26px; }
+  .tchat-journal li { grid-template-columns: 74px 1fr auto; }
+  .tchat-journal-src { display: none; }
+}

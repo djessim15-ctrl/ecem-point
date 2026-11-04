@@ -48,6 +48,8 @@ python3 -m http.server 8080
 | **Export CSV** | Historique, Profil | téléchargement de l’historique (compatible Excel) |
 | **Recherche insensible aux accents** | toutes les listes | « ines » trouve « Inès » |
 | **Tchat amélioré** | Tchat | envoi optimiste, séparateurs de jours, avatars, sélecteur d’emoji, Entrée pour envoyer |
+| **Tchat de classe** | Tchat de classe | tous les rôles, messages adoucis par IA, original masquable, journal des détections |
+| **Filtre de gentillesse** | Tchat de classe | 3 niveaux (Doux / Gênant / Ultra), interrupteur, repli local hors-ligne |
 | **Confettis, sons, vibrations** | partout | retours immédiats, désactivables dans le profil |
 | **Mode démo** | `app.html?demo=1` | classe fictive en mémoire, bascule élève / suppléant / délégué |
 | **Installation PWA** | navigateur | manifeste, icônes, service worker (coquille hors ligne) |
@@ -572,3 +574,42 @@ affiché en bas de page : **« temps réel activé »**.
   UMD **vendu dans le dépôt** (`assets/vendor/supabase.js`), donc zéro CDN,
   zéro `npm install`, le site fonctionne hors ligne côté dépendances
 - PostgreSQL (Supabase) — RLS, fonctions `SECURITY DEFINER`, Realtime
+
+## 9. Tchat de classe et filtre de gentillesse (GPT-OSS 120B · Groq)
+
+Tous les comptes connectés discutent dans **Tchat de classe**. Avant
+publication, chaque message passe par une IA qui repère **insultes, gros mots,
+spam, harcèlement, agressivité, flood, majuscules agressives, haine et données
+personnelles**, puis le réécrit en trois versions de plus en plus gentilles :
+
+| Niveau | Rendu |
+|---|---|
+| **Doux** | ton neutre et poli, l’idée reste |
+| **Gênant** | excuses et politesse exagérées, franchement gênant |
+| **Ultra** | absurde et mielleux, emojis partout |
+
+- **Bouton « Voir l’original »** sur les messages adoucis. La version brute
+  n’est renvoyée qu’à **son auteur** et à l’**encadrement** : c’est la fonction
+  `class_chat_feed()` qui masque la colonne aux autres (le navigateur ne la
+  reçoit jamais).
+- **Panneau « Détections »** : totaux, répartition par catégorie et journal des
+  derniers messages repérés.
+- **Interrupteur** pour couper le filtre : les messages partent alors tels
+  quels (pratique pour tester, à laisser actif en classe).
+- **Anti-flood côté serveur** : 8 messages par 30 secondes et par personne.
+
+### Où vit la clé Groq
+La clé **n’est pas dans le dépôt** (qui est public) : le navigateur n’a jamais
+accès à `GROQ_API_KEY`. L’appel passe par l’Edge Function `moderate`, qui lit la
+clé dans les secrets Supabase :
+
+```bash
+supabase secrets set GROQ_API_KEY=gsk_…
+supabase functions deploy moderate
+```
+
+Si l’IA ne répond pas (hors-ligne, quota, panne), un **filtre local** prend le
+relais avec les mêmes trois niveaux : le message part quand même, adouci, et le
+journal indique `local` au lieu de `IA`.
+
+Migrations concernées : `0008_class_chat.sql`, `0009_moderation_ia.sql`.
