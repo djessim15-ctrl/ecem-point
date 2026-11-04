@@ -2936,3 +2936,237 @@ textarea { resize: vertical; min-height: 96px; line-height: 1.5; }
   background: var(--green-soft, rgba(46, 164, 106, .14));
   color: var(--green, #2ea46a); font-size: .7rem; font-weight: 900;
 }
+
+/* ==========================================================================
+ * v2.9 — Cartes à collectionner, QR de partage, modération, climat
+ * ======================================================================== */
+
+/* --------------------------------------------------------------------------
+ * Cartes à collectionner
+ * ----------------------------------------------------------------------- */
+.cartes-hote { margin-top: 22px; }
+.cartes-panel .panel-body { padding-top: 4px; }
+
+.cartes-grille {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 12px;
+  margin: 14px 0 6px;
+}
+
+.carte {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 10px 11px;
+  border-radius: var(--radius, 16px);
+  border: 1px solid var(--border, rgba(34, 24, 76, .09));
+  background: var(--surface-solid, #fff);
+  box-shadow: var(--shadow-xs, 0 1px 2px rgba(23, 18, 46, .05));
+  text-align: center;
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.carte:hover { transform: translateY(-2px); box-shadow: var(--shadow-sm, 0 4px 14px -6px rgba(23, 18, 46, .12)); }
+
+.carte-vitrine {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius-sm, 12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-softer, rgba(124, 92, 255, .07));
+}
+.carte-emoji { font-size: 34px; line-height: 1; }
+
+.carte-nom {
+  font-family: var(--font-display, inherit);
+  font-size: .8rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text, #17122e);
+}
+.carte-raretes { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; }
+.carte-raretes .pill { font-size: .62rem; padding: 2px 7px; }
+
+.carte-doublon {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  min-width: 22px;
+  height: 22px;
+  border-radius: var(--radius-full, 999px);
+  background: var(--accent, #7c5cff);
+  color: #fff;
+  font-size: .68rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+}
+
+.carte.is-locked {
+  opacity: .62;
+  border-style: dashed;
+  box-shadow: none;
+}
+.carte.is-locked .carte-vitrine { background: var(--surface-2, rgba(255, 255, 255, .55)); }
+.carte.is-locked .carte-emoji { font-size: 26px; opacity: .6; }
+
+/* Teintes par rareté */
+.carte--bleu .carte-vitrine   { background: linear-gradient(145deg, rgba(47, 125, 225, .18), rgba(47, 125, 225, .06)); }
+.carte--vert .carte-vitrine   { background: linear-gradient(145deg, rgba(16, 165, 106, .18), rgba(16, 165, 106, .06)); }
+.carte--violet .carte-vitrine { background: linear-gradient(145deg, rgba(124, 92, 255, .2), rgba(124, 92, 255, .06)); }
+.carte--orange .carte-vitrine { background: linear-gradient(145deg, rgba(240, 138, 36, .2), rgba(240, 138, 36, .06)); }
+.carte--or .carte-vitrine     { background: linear-gradient(145deg, rgba(233, 162, 24, .24), rgba(233, 162, 24, .08)); }
+.carte--rose .carte-vitrine   { background: linear-gradient(145deg, rgba(232, 85, 143, .22), rgba(232, 85, 143, .07)); }
+
+.carte--or.is-owned { border-color: rgba(233, 162, 24, .45); }
+.carte--rose.is-owned { border-color: rgba(232, 85, 143, .45); }
+
+.carte--grande {
+  max-width: 220px;
+  margin: 4px auto 0;
+  padding: 16px 14px;
+}
+.carte--grande .carte-emoji { font-size: 56px; }
+.carte--grande .carte-nom { font-size: .95rem; }
+
+.carte.is-revealed { animation: carte-pop .45s cubic-bezier(.2, .9, .3, 1.3); }
+@keyframes carte-pop {
+  from { transform: scale(.7) rotate(-4deg); opacity: 0; }
+  to   { transform: scale(1) rotate(0); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .carte.is-revealed { animation: none; }
+  .carte:hover { transform: none; }
+}
+
+.cartes-legende { font-size: .78rem; margin: 10px 0 2px; }
+
+/* --------------------------------------------------------------------------
+ * QR de partage
+ * ----------------------------------------------------------------------- */
+.qr-bloc { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.qr-image {
+  width: 100%;
+  max-width: 232px;
+  padding: 10px;
+  border-radius: var(--radius, 16px);
+  background: #fff;
+  border: 1px solid var(--border, rgba(34, 24, 76, .09));
+  box-shadow: var(--shadow-sm, 0 4px 14px -6px rgba(23, 18, 46, .12));
+}
+.qr-image svg { display: block; width: 100%; height: auto; }
+.qr-image--vide { color: var(--text-faint, #8d87a3); font-size: .8rem; text-align: center; padding: 26px 10px; }
+.qr-bas { display: flex; gap: 8px; width: 100%; }
+.qr-lien { flex: 1; font-size: .78rem; }
+.qr-legende { font-size: .76rem; text-align: center; margin: 0; }
+
+/* --------------------------------------------------------------------------
+ * Modération centralisée (admin)
+ * ----------------------------------------------------------------------- */
+.admin-ligne {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border, rgba(34, 24, 76, .09));
+  display: grid;
+  gap: 7px;
+}
+.admin-ligne:last-child { border-bottom: 0; }
+.admin-ligne.is-muted { opacity: .62; }
+.admin-ligne-tete { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: .85rem; }
+.admin-ligne-tete b { font-family: var(--font-display, inherit); }
+.admin-extrait {
+  margin: 0;
+  font-size: .87rem;
+  line-height: 1.45;
+  color: var(--text-soft, #585170);
+  background: var(--surface-3, rgba(247, 245, 255, .9));
+  border-radius: var(--radius-sm, 12px);
+  padding: 8px 11px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.admin-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.admin-table { display: grid; }
+.admin-table-ligne {
+  display: grid;
+  grid-template-columns: minmax(80px, 1.2fr) 92px minmax(90px, 1.4fr) 72px;
+  gap: 8px;
+  align-items: center;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--border, rgba(34, 24, 76, .09));
+  font-size: .82rem;
+}
+.admin-table-ligne:last-child { border-bottom: 0; }
+.admin-table-nom { font-weight: 600; color: var(--text, #17122e); }
+.admin-table-agent { color: var(--text-faint, #8d87a3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 640px) {
+  .admin-table-ligne { grid-template-columns: 1fr auto; row-gap: 4px; }
+  .admin-table-agent { grid-column: 1 / -1; }
+}
+
+/* --------------------------------------------------------------------------
+ * Rapport de climat (admin)
+ * ----------------------------------------------------------------------- */
+.climat-entete {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 18px;
+  margin-bottom: 16px;
+  border-radius: var(--radius-lg, 22px);
+  background: var(--surface-solid, #fff);
+  border: 1px solid var(--border, rgba(34, 24, 76, .09));
+  box-shadow: var(--shadow-sm, 0 4px 14px -6px rgba(23, 18, 46, .12));
+}
+.climat-score { flex: none; }
+.climat-chiffres { display: flex; gap: 18px; flex-wrap: wrap; }
+
+.climat-barre {
+  display: grid;
+  grid-template-columns: minmax(110px, 190px) 1fr 38px;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 9px;
+  font-size: .82rem;
+}
+.climat-barre-nom { color: var(--text-soft, #585170); }
+.climat-barre-piste {
+  height: 9px;
+  border-radius: 999px;
+  background: var(--surface-2, rgba(255, 255, 255, .55));
+  overflow: hidden;
+}
+.climat-barre-piste > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent, #7c5cff), var(--accent-2, #a855f7));
+}
+.climat-barre b { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Pastilles de couleur utilisées par les raretés et les statuts */
+.pill--bleu   { background: rgba(47, 125, 225, .13);  color: #2f7de1; }
+.pill--vert   { background: rgba(16, 165, 106, .13);  color: #0f935f; }
+.pill--violet { background: rgba(124, 92, 255, .14);  color: #6b4ce0; }
+.pill--orange { background: rgba(240, 138, 36, .16);  color: #c97216; }
+.pill--or     { background: rgba(233, 162, 24, .16);  color: #b57c0d; }
+.pill--rose   { background: rgba(232, 85, 143, .15);  color: #c93a76; }
+.pill--ok     { background: rgba(16, 165, 106, .13);  color: #0f935f; }
+
+/* Barre d'outils du rapport de climat (onglet « Climat ») */
+.climat-barre-outils {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.climat-lien { margin-top: 8px; }

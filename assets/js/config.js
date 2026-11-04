@@ -17,7 +17,7 @@ window.ECEM_CONFIG = {
 
   /* Nom affiché dans l'interface. */
   APP_NAME: 'ECEM Point',
-  APP_VERSION: '2.8',
+  APP_VERSION: '2.9',
 
   /* Intervalle du battement de cœur qui marque un compte comme « connecté ». */
   HEARTBEAT_MS: 25000,

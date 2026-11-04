@@ -66,6 +66,7 @@
       { id: 'badges', label: 'Succès', icon: 'award', group: 'Analyse' },
       { id: 'chat', label: 'Tchat encadrement', icon: 'chat', group: 'Encadrement' },
       { id: 'tchat', label: 'Tchat de classe', icon: 'chat', group: 'Encadrement' },
+      { id: 'climat', label: 'Climat de la classe', icon: 'pulse', group: 'Encadrement' },
       { id: 'profile', label: 'Profil & réglages', icon: 'user', group: 'Compte' }
     ]
   };
@@ -367,7 +368,7 @@
 
     /* Le bouton flottant ne sert à rien sur les écrans d'action ou de saisie. */
     if (dom.fab) {
-      dom.fab.hidden = ['give', 'send', 'chat', 'tchat', 'profile', 'admin'].indexOf(state.tab) !== -1;
+      dom.fab.hidden = ['give', 'send', 'chat', 'tchat', 'climat', 'profile', 'admin'].indexOf(state.tab) !== -1;
     }
 
     if (state.tab === 'chat') {
@@ -718,6 +719,7 @@
         case 'chat': renderChat(); break;
         case 'tchat': renderTchat(); break;
         case 'profile': renderProfile(); break;
+        case 'climat': renderClimat(); break;
         case 'admin': renderAdmin(); break;
         default: renderHome();
       }
@@ -1790,6 +1792,37 @@
   /* ---------------------------------------------------------------------- */
   /* ADMINISTRATION                                                         */
   /* ---------------------------------------------------------------------- */
+  /* ---------------------------------------------------------------------- */
+  /* CLIMAT DE LA CLASSE                                                    */
+  /* ---------------------------------------------------------------------- */
+  function renderClimat() {
+    var host = document.getElementById('climat-content') || document.getElementById('view-climat');
+    if (!host) return;
+
+    if (!Store.isStaff || !Store.isStaff()) {
+      UI.clear(host);
+      host.appendChild(UI.el('div', { class: 'empty' }, [
+        UI.el('span', { class: 'empty-ico' }, [UI.icon('lock', { size: 26 })]),
+        UI.el('div', { class: 'empty-title', text: 'Accès réservé' }),
+        UI.el('div', { class: 'empty-text', text:
+          'Le rapport de climat est réservé à l’encadrement de la classe.' })
+      ]));
+      return;
+    }
+
+    if (window.ECEM && window.ECEM.Climat) {
+      window.ECEM.Climat.mount(host);
+      return;
+    }
+
+    UI.clear(host);
+    host.appendChild(UI.el('div', { class: 'empty' }, [
+      UI.el('span', { class: 'empty-ico' }, [UI.icon('chart', { size: 26 })]),
+      UI.el('div', { class: 'empty-title', text: 'Rapport indisponible' }),
+      UI.el('div', { class: 'empty-text', text: 'Le module du rapport de climat n’a pas pu se charger.' })
+    ]));
+  }
+
   function renderAdmin() {
     var host = document.getElementById('admin-content') || document.getElementById('view-admin');
     if (!host) return;
@@ -1863,6 +1896,11 @@
     });
 
     host.appendChild(grid);
+
+    /* Collection de cartes : un paquet par semaine, doublons comptés. */
+    var cartesHote = UI.el('div', { class: 'cartes-hote' });
+    host.appendChild(cartesHote);
+    if (window.ECEM.Cards) window.ECEM.Cards.mount(cartesHote);
   }
 
   /* ---------------------------------------------------------------------- */
@@ -2146,6 +2184,18 @@
         }
       })
     ]));
+
+    /* QR de partage : fabriqué sur l'appareil, donc utilisable hors-ligne. */
+    if (window.ECEM.QR) {
+      dataBody.appendChild(UI.el('div', { class: 'pref-row' }, [
+        UI.el('span', { class: 'pref-ico' }, [UI.icon('share', { size: 17 })]),
+        UI.el('div', { style: { flex: '1' } }, [
+          UI.el('div', { class: 'pref-label', text: 'QR code de la classe' }),
+          UI.el('div', { class: 'pref-desc', text: 'À faire scanner par un camarade : il arrive sur la page d’inscription.' })
+        ]),
+        window.ECEM.QR.bouton({ class: 'btn btn-ghost btn-sm pref-action', label: 'Afficher' })
+      ]));
+    }
 
     if (Store.state.demo) {
       dataBody.appendChild(UI.el('div', { class: 'pref-row' }, [
@@ -2965,4 +3015,15 @@
       });
     });
   }
+
+  /* ---------------------------------------------------------------------- */
+  /* API interne                                                            */
+  /* ---------------------------------------------------------------------- */
+  /* Permet à d'autres modules (le tchat par exemple) d'ouvrir un écran sans
+     dépendre des éléments du DOM de la page. */
+  window.ECEM.App = {
+    showTab: showTab,
+    tab: function () { return state.tab; },
+    refresh: function () { renderCurrent(); }
+  };
 })();
