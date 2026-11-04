@@ -2382,6 +2382,12 @@ textarea { resize: vertical; min-height: 96px; line-height: 1.5; }
 .pwa-chip-text span { font-size: .74rem; color: var(--text-faint); }
 .pwa-chip .icon-btn { width: 28px; height: 28px; border: 0; background: transparent; }
 
+@media (min-width: 1024px) {
+  /* Le bandeau d'installation ne doit pas recouvrir la carte du compte,
+     en bas de la barre latérale : il vit dans la colonne de contenu. */
+  .pwa-chip { left: auto; right: 26px; bottom: 22px; }
+}
+
 @media (max-width: 640px) {
   .pwa-chip { bottom: 88px; left: 12px; right: 12px; }
 }
