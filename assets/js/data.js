@@ -99,6 +99,18 @@
     return state.profiles.filter(function (profile) { return profile.role === 'eleve'; });
   };
 
+  /* Depuis la migration 0020, tout le monde gagne des points : élèves,
+     délégués et suppléants. `members()` sert donc partout où l’on parle de
+     points (classement, dons, statistiques) et `students()` reste réservé aux
+     listes purement « élèves ». */
+  Store.members = function () {
+    return state.profiles.slice();
+  };
+
+  Store.onlineMembers = function () {
+    return Store.members().filter(Store.isOnline);
+  };
+
   Store.staff = function () {
     return state.profiles.filter(function (profile) { return profile.role !== 'eleve'; });
   };
@@ -116,11 +128,11 @@
   };
 
   Store.totalPoints = function () {
-    return Store.students().reduce(function (total, profile) { return total + (profile.points || 0); }, 0);
+    return Store.members().reduce(function (total, profile) { return total + (profile.points || 0); }, 0);
   };
 
   Store.sortByPoints = function (list) {
-    return (list || Store.students()).slice().sort(function (a, b) {
+    return (list || Store.members()).slice().sort(function (a, b) {
       if (b.points !== a.points) return b.points - a.points;
       return a.prenom.localeCompare(b.prenom, 'fr');
     });

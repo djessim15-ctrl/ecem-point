@@ -1120,7 +1120,6 @@
       var target = byId(args.p_target);
       if (!me || (me.role !== 'delegue' && !(me.role === 'suppleant' && settings.suppleant_can_award))) fail('INTERDIT');
       if (!target) fail('ELEVE_INTROUVABLE');
-      if (target.role !== 'eleve') fail('CIBLE_INVALIDE');
       if (!args.p_amount || args.p_amount < settings.award_min || args.p_amount > settings.award_max) fail('MONTANT_INVALIDE');
 
       var dore = settings.golden_until && new Date(settings.golden_until) > new Date();
@@ -1172,8 +1171,6 @@
       var target = byId(args.p_target);
       if (!me) fail('NON_CONNECTE');
       if (!target) fail('ELEVE_INTROUVABLE');
-      if (me.role !== 'eleve') fail('INTERDIT');
-      if (target.role !== 'eleve') fail('CIBLE_INVALIDE');
       if (target.id === me.id) fail('CIBLE_INVALIDE');
       if (!args.p_amount || args.p_amount < settings.transfer_min) fail('MONTANT_INVALIDE');
       if (me.points < args.p_amount) fail('POINTS_INSUFFISANTS');

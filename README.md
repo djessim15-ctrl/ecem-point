@@ -80,6 +80,23 @@ python3 -m http.server 8080
 | **Rapport de climat** | onglet **Climat de la classe** (encadrement) + Admin → Climat | score, familles, personnes visées, paires en conflit → export CSV et impression PDF |
 | **QR code de partage** | Connexion, Profil | QR fabriqué sur l’appareil par `assets/vendor/qrcode.js`, aucun service externe, marche hors-ligne |
 
+### Nouveautés 2.9.1
+- **Les délégués et les suppléants gagnent aussi des points** (migration 0020).
+  `award_points()`, `remove_points()` et `transfer_points()` ne réservent plus
+  leurs cibles aux élèves, et `wheel_spin()` est ouvert à tous les rôles : la
+  roue hebdomadaire n’est plus réservée aux élèves. Le droit de *donner* ne
+  change pas (`can_award()`, réglage `suppleant_can_award`) et personne ne peut
+  s’attribuer des points à soi-même. Côté interface, la pastille de points, le
+  classement, les statistiques, les grilles « Donner » / « Envoyer » et les
+  fiches détaillées mélangent désormais tous les rôles, avec une étiquette
+  discrète (délégué, suppléant) pour situer chacun.
+- **Un message réécrit par l’encadrement ne se voit pas chez son auteur**
+  (migration 0021) : `class_messages.body_avant` garde le texte initial et
+  `class_chat_feed()` le renvoie au compte qui a écrit le message, alors que les
+  autres lisent la version corrigée.
+- **Le badge « modifié » a disparu** de l’interface : plus aucune pastille
+  « modifié » sur les messages, ni pour l’auteur, ni pour les autres.
+
 ### Nouveautés 2.9
 - **Cartes à collectionner** : `cards`, `card_ownership`, `card_packs` et les
   fonctions `cards_catalogue()`, `my_cards()`, `open_card_pack()`. Le tirage
@@ -99,8 +116,9 @@ python3 -m http.server 8080
   profil, généré hors-ligne (`qrcode-generator`, MIT).
 
 ### Corrections
-- Les **délégués et suppléants n’apparaissent plus dans le classement** (ils
-  n’ont pas de solde : seuls les élèves sont classés).
+- Les **délégués et les suppléants** pouvaient donner des points mais n’en
+  gagnaient jamais : depuis la 2.9.1 ils ont un solde et figurent au classement
+  (voir « Nouveautés 2.9.1 »).
 - La **présence** est recalculée à partir de `last_seen_at` au lieu d’être
   affichée « connecté » en dur sur son propre compte.
 - Les **recherches** ne perdent plus la saisie en cours lors d’un rafraîchissement

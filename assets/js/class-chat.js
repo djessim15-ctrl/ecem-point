@@ -1254,10 +1254,6 @@
       meta.push(UI.el('span', { class: 'tchat-badge tchat-badge--annonce', title: 'Annonce de l’encadrement', text: '📣 annonce' }));
     }
 
-    if (message.edited_at) {
-      meta.push(UI.el('span', { class: 'tchat-badge tchat-badge--edit', title: 'Message modifié par un administrateur', text: 'modifié' }));
-    }
-
     if (message.hidden) {
       meta.push(UI.el('span', { class: 'tchat-badge tchat-badge--masque', title: 'Message masqué : invisible pour les autres', text: 'masqué' }));
     }

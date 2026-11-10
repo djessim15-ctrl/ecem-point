@@ -2445,7 +2445,6 @@ textarea { resize: vertical; min-height: 96px; line-height: 1.5; }
 .chat-form.is-annonce { border-color: var(--gold); }
 
 .tchat-badge--annonce { background: rgba(233, 162, 24, .22); color: var(--gold, #b4780a); }
-.tchat-badge--edit { background: rgba(90, 120, 220, .16); color: #5a78dc; }
 .tchat-badge--masque { background: var(--red-soft); color: var(--red); }
 
 .msg--annonce .msg-bubble {
