@@ -55,6 +55,7 @@
       btnSignup: UI.$('#btn-signup'),
       btnDemo: UI.$('#btn-demo'),
       btnHelp: UI.$('#btn-help'),
+      btnQr: UI.$('#btn-qr'),
       alert: UI.$('#auth-alert'),
       backendAlert: UI.$('#backend-alert'),
       status: UI.$('#auth-status'),
@@ -302,10 +303,33 @@
     if (dom.btnHelp) {
       dom.btnHelp.addEventListener('click', openHelp);
     }
+    if (dom.btnQr) {
+      dom.btnQr.addEventListener('click', openQr);
+    }
     UI.$$('a[href="app.html?demo=1"]').forEach(function (link) {
       link.addEventListener('click', function () {
         try { window.localStorage.setItem('ecem-demo-role', 'delegue'); } catch (e) {}
       });
+    });
+  }
+
+  /* QR de partage : dessiné sur l'appareil par assets/vendor/qrcode.js. */
+  function openQr() {
+    if (!window.ECEM || !window.ECEM.QR) {
+      showAlert('Le générateur de QR n’a pas pu se charger. Recharge la page.', 'error');
+      return;
+    }
+    var modale = UI.modal({
+      title: 'Partager ECEM Point',
+      sub: 'Ce QR code est fabriqué sur ton appareil : il fonctionne même sans connexion.',
+      eye: 'share',
+      body: window.ECEM.QR.bloc(),
+      footer: [
+        UI.el('button', {
+          type: 'button', class: 'btn btn-primary', text: 'Fermer',
+          onclick: function () { modale.close(); }
+        })
+      ]
     });
   }
 
@@ -395,6 +419,53 @@
   }
 
   /* -------------------------------------------------------------------------
+   * Anti-bruteforce
+   * ---------------------------------------------------------------------- *
+   * Chaque tentative — réussie ou non — part dans `login_attempts` avec le
+   * prénom et l'appareil. `login_guard()` répond si le prénom est bloqué
+   * (5 échecs en 15 minutes). Rien de tout cela ne bloque la connexion si la
+   * base est injoignable : on ne fait jamais échouer une connexion à cause
+   * du journal.
+   * ---------------------------------------------------------------------- */
+  function agentTexte() {
+    try {
+      return String(window.navigator.userAgent || '').slice(0, 180);
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function dureeTexte(secondes) {
+    var s = Math.max(0, Math.round(secondes || 0));
+    if (s <= 60) return Math.max(1, s) + ' seconde' + (s > 1 ? 's' : '');
+    var minutes = Math.ceil(s / 60);
+    return minutes + ' minute' + (minutes > 1 ? 's' : '');
+  }
+
+  function journaliser(prenom, ok) {
+    try {
+      var appel = sb.rpc('log_login_attempt', {
+        p_prenom: prenom,
+        p_ok: !!ok,
+        p_agent: agentTexte()
+      });
+      if (appel && appel.then) appel.then(function () {}, function () {});
+    } catch (e) {}
+  }
+
+  function verifierBlocage(prenom) {
+    try {
+      return sb.rpc('login_guard', { p_prenom: prenom }).then(function (res) {
+        return (res && !res.error && res.data) || null;
+      }, function () {
+        return null;
+      });
+    } catch (e) {
+      return Promise.resolve(null);
+    }
+  }
+
+  /* -------------------------------------------------------------------------
    * Connexion
    * ---------------------------------------------------------------------- */
   function onLogin(event) {
@@ -411,30 +482,60 @@
 
     setBusy(dom.btnLogin, true, 'Connexion…');
 
-    sb.auth
-      .signInWithPassword({ email: UI.emailFromPrenom(prenom), password: password })
-      .then(function (res) {
-        if (res.error) throw res.error;
-        return sb.from('profiles').select('id, role, prenom').eq('id', res.data.user.id).maybeSingle();
-      })
-      .then(function (res) {
-        if (res.error) throw res.error;
-
-        if (!res.data) {
-          return sb.auth.getSession().then(function (r) {
-            setBusy(dom.btnLogin, false, 'Se connecter');
-            enterRecovery(r.data.session);
-          });
+    verifierBlocage(prenom)
+      .then(function (garde) {
+        /* Prénom bloqué : on s'arrête là, sans même tenter l'authentification. */
+        if (garde && garde.bloque) {
+          setBusy(dom.btnLogin, false, 'Se connecter');
+          showAlert(
+            'Trop de tentatives pour « ' + prenom + ' ». Réessaie dans ' +
+            dureeTexte(garde.restant_secondes) + '.',
+            'error'
+          );
+          if (window.ECEM.FX) window.ECEM.FX.sound('error');
+          return null;
         }
 
-        setStatus('Bienvenue ' + res.data.prenom + ', redirection…');
-        window.location.replace('app.html');
+        return sb.auth
+          .signInWithPassword({ email: UI.emailFromPrenom(prenom), password: password })
+          .then(function (res) {
+            if (res.error) {
+              journaliser(prenom, false);
+              throw res.error;
+            }
+            journaliser(prenom, true);
+            return sb.from('profiles').select('id, role, prenom').eq('id', res.data.user.id).maybeSingle();
+          })
+          .then(function (res) {
+            if (!res) return;
+            if (res.error) throw res.error;
+
+            if (!res.data) {
+              return sb.auth.getSession().then(function (r) {
+                setBusy(dom.btnLogin, false, 'Se connecter');
+                enterRecovery(r.data.session);
+              });
+            }
+
+            setStatus('Bienvenue ' + res.data.prenom + ', redirection…');
+            window.location.replace('app.html');
+          });
       })
       .catch(function (err) {
         setBusy(dom.btnLogin, false, 'Se connecter');
-        showAlert(errorText(err), 'error');
+        var texte = errorText(err);
+        showAlert(texte, 'error');
         if (window.ECEM.FX) window.ECEM.FX.sound('error');
         dom.loginPassword.select();
+
+        /* On prévient avant le blocage plutôt qu'après. */
+        verifierBlocage(prenom).then(function (garde) {
+          if (garde && !garde.bloque && garde.echecs >= 2 && garde.max) {
+            showAlert(texte + ' Encore ' + Math.max(0, garde.max - garde.echecs) +
+              ' essai' + (garde.max - garde.echecs > 1 ? 's' : '') +
+              ' avant un blocage de 15 minutes.', 'error');
+          }
+        });
       });
   }
 

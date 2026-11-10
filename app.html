@@ -6,13 +6,13 @@
 <meta name="description" content="ECEM Point — tableau de bord des points de la classe : donner, échanger, suivre le classement et les statistiques.">
 <meta name="theme-color" content="#f6f5fb">
 <title>ECEM Point · Ma classe</title>
-<link rel="manifest" href="manifest.webmanifest?v=2.8.0">
+<link rel="manifest" href="manifest.webmanifest?v=2.9.1">
 <link rel="icon" href="assets/icons/icon.svg" type="image/svg+xml">
 <link rel="icon" href="assets/icons/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
 <link rel="preload" href="assets/fonts/inter-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="assets/fonts/jakarta-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="assets/css/style.css?v=2.8.0">
+<link rel="stylesheet" href="assets/css/style.css?v=2.9.1">
 <script>
   (function () {
     try {
@@ -308,6 +308,20 @@
       <!-- ======================= TCHAT DE CLASSE ======================= -->
       <section class="view" id="view-tchat" hidden aria-labelledby="tchat-title"></section>
 
+      <!-- ==================== CLIMAT DE LA CLASSE ====================== -->
+      <section class="view" id="view-climat" hidden aria-labelledby="climat-title">
+        <div class="view-head">
+          <div>
+            <h2 id="climat-title">Climat de la classe</h2>
+            <p class="sub">
+              Le pouls de la classe : score sur 100, familles de violence,
+              personnes visées et paires en conflit. Réservé à l’encadrement.
+            </p>
+          </div>
+        </div>
+        <div id="climat-content"></div>
+      </section>
+
       <!-- =========================== PROFIL =========================== -->
       <section class="view" id="view-admin" hidden aria-labelledby="admin-title">
       <div id="admin-content" class="admin-content"></div>
@@ -340,23 +354,27 @@
   <p style="padding:24px;font-family:system-ui">Ce site a besoin de JavaScript.</p>
 </noscript>
 
-<script src="assets/vendor/supabase.js?v=2.8.0"></script>
-<script src="assets/js/config.js?v=2.8.0"></script>
-<script src="assets/js/health.js?v=2.8.0"></script>
-<script src="assets/js/theme.js?v=2.8.0"></script>
-<script src="assets/js/icons.js?v=2.8.0"></script>
-<script src="assets/js/ui.js?v=2.8.0"></script>
-<script src="assets/js/fx.js?v=2.8.0"></script>
-<script src="assets/js/charts.js?v=2.8.0"></script>
-<script src="assets/js/progress.js?v=2.8.0"></script>
-<script src="assets/js/insights.js?v=2.8.0"></script>
-<script src="assets/js/demo.js?v=2.8.0"></script>
-<script src="assets/js/db.js?v=2.8.0"></script>
-<script src="assets/js/data.js?v=2.8.0"></script>
-<script src="assets/js/class-chat.js?v=2.8.0"></script>
-<script src="assets/js/admin.js?v=2.8.0"></script>
-<script src="assets/js/app.js?v=2.8.0"></script>
-<script src="assets/js/pwa.js?v=2.8.0"></script>
+<script src="assets/vendor/supabase.js?v=2.9.1"></script>
+<script src="assets/js/config.js?v=2.9.1"></script>
+<script src="assets/js/health.js?v=2.9.1"></script>
+<script src="assets/js/theme.js?v=2.9.1"></script>
+<script src="assets/js/icons.js?v=2.9.1"></script>
+<script src="assets/js/ui.js?v=2.9.1"></script>
+<script src="assets/vendor/qrcode.js?v=2.9.1"></script>
+<script src="assets/js/qr.js?v=2.9.1"></script>
+<script src="assets/js/fx.js?v=2.9.1"></script>
+<script src="assets/js/charts.js?v=2.9.1"></script>
+<script src="assets/js/progress.js?v=2.9.1"></script>
+<script src="assets/js/insights.js?v=2.9.1"></script>
+<script src="assets/js/demo.js?v=2.9.1"></script>
+<script src="assets/js/db.js?v=2.9.1"></script>
+<script src="assets/js/data.js?v=2.9.1"></script>
+<script src="assets/js/class-chat.js?v=2.9.1"></script>
+<script src="assets/js/cards.js?v=2.9.1"></script>
+<script src="assets/js/climat.js?v=2.9.1"></script>
+<script src="assets/js/admin.js?v=2.9.1"></script>
+<script src="assets/js/app.js?v=2.9.1"></script>
+<script src="assets/js/pwa.js?v=2.9.1"></script>
 
 <!-- Filet de sécurité : si un vieux fichier en cache empêche l'interface de
      s'afficher, on montre une explication et un bouton de réparation plutôt

@@ -73,10 +73,52 @@ python3 -m http.server 8080
 | **Installation PWA** | navigateur | manifeste, icônes, service worker (coquille hors ligne) |
 | **Hors ligne & erreurs** | global | indicateur de connexion, messages clairs, bouton « Réessayer » |
 | **Diagnostic de connexion** | bandeau / écran d’erreur | test de la base, cause probable, lien « Ouvrir Supabase », voir § 0 bis |
+| **Cartes à collectionner** | Succès | 12 cartes, 4 raretés (55 / 28 / 12 / 5 %), un paquet par semaine et par élève, doublons comptés |
+| **Modération centralisée** | Admin → Modération | messages filtrés, signalements 🚩 et messages privés filtrés au même endroit : masquer, modifier, supprimer |
+| **Qui essaie de se connecter** | Admin → Connexions | journal des tentatives (prénom, réussite, appareil, date) + purge |
+| **Anti-bruteforce** | Connexion | 5 échecs en 15 minutes sur un prénom → blocage d’un quart d’heure, message avec le temps restant |
+| **Rapport de climat** | onglet **Climat de la classe** (encadrement) + Admin → Climat | score, familles, personnes visées, paires en conflit → export CSV et impression PDF |
+| **QR code de partage** | Connexion, Profil | QR fabriqué sur l’appareil par `assets/vendor/qrcode.js`, aucun service externe, marche hors-ligne |
+
+### Nouveautés 2.9.1
+- **Les délégués et les suppléants gagnent aussi des points** (migration 0020).
+  `award_points()`, `remove_points()` et `transfer_points()` ne réservent plus
+  leurs cibles aux élèves, et `wheel_spin()` est ouvert à tous les rôles : la
+  roue hebdomadaire n’est plus réservée aux élèves. Le droit de *donner* ne
+  change pas (`can_award()`, réglage `suppleant_can_award`) et personne ne peut
+  s’attribuer des points à soi-même. Côté interface, la pastille de points, le
+  classement, les statistiques, les grilles « Donner » / « Envoyer » et les
+  fiches détaillées mélangent désormais tous les rôles, avec une étiquette
+  discrète (délégué, suppléant) pour situer chacun.
+- **Un message réécrit par l’encadrement ne se voit pas chez son auteur**
+  (migration 0021) : `class_messages.body_avant` garde le texte initial et
+  `class_chat_feed()` le renvoie au compte qui a écrit le message, alors que les
+  autres lisent la version corrigée.
+- **Le badge « modifié » a disparu** de l’interface : plus aucune pastille
+  « modifié » sur les messages, ni pour l’auteur, ni pour les autres.
+
+### Nouveautés 2.9
+- **Cartes à collectionner** : `cards`, `card_ownership`, `card_packs` et les
+  fonctions `cards_catalogue()`, `my_cards()`, `open_card_pack()`. Le tirage
+  est fait en SQL (jamais dans le navigateur) ; un paquet toutes les 7 jours.
+- **Anti-bruteforce** : `login_attempts` + `login_guard()` (5 échecs en 15 min →
+  blocage temporaire) et `log_login_attempt()`, appelés depuis la page de
+  connexion. `admin_login_attempts()` et `admin_clear_login_attempts()` donnent
+  à l’admin la liste de qui essaie d’entrer, avec l’appareil utilisé.
+- **Rapport de climat** : `climat_report()` renvoie score, familles, cibles
+  récurrentes et paires en conflit. Il a son **propre écran** (« Climat de la
+  classe », visible par l’encadrement dans le menu, avec un raccourci depuis le
+  panneau Détections du tchat) : export CSV et impression PDF depuis le
+  navigateur. L’onglet Climat de l’administration affiche le même rapport.
+- **Modération centralisée** : un onglet unique qui rassemble le tchat de
+  classe filtré, les signalements 🚩 et les messages privés filtrés.
+- **QR de partage** : bouton « QR code » sur la page de connexion et dans le
+  profil, généré hors-ligne (`qrcode-generator`, MIT).
 
 ### Corrections
-- Les **délégués et suppléants n’apparaissent plus dans le classement** (ils
-  n’ont pas de solde : seuls les élèves sont classés).
+- Les **délégués et les suppléants** pouvaient donner des points mais n’en
+  gagnaient jamais : depuis la 2.9.1 ils ont un solde et figurent au classement
+  (voir « Nouveautés 2.9.1 »).
 - La **présence** est recalculée à partir de `last_seen_at` au lieu d’être
   affichée « connecté » en dur sur son propre compte.
 - Les **recherches** ne perdent plus la saisie en cours lors d’un rafraîchissement

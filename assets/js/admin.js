@@ -18,9 +18,10 @@
     comptes: [],
     stats: null,
     filtre: '',
-    onglet: 'comptes',   /* comptes | codes */
+    onglet: 'comptes',   /* comptes | codes | moderation | connexions | climat */
     chargement: false,
-    erreur: ''
+    erreur: '',
+    extras: {}           /* données des onglets lourds, chargées à la demande */
   };
 
   var dom = {};
@@ -440,6 +441,448 @@
     ]));
   }
 
+  /* ---------------------------------------------------------------------- */
+  /* Modération centralisée                                                 */
+  /* ---------------------------------------------------------------------- *
+   * Un seul onglet pour tout ce qui est signalé : les messages du tchat de
+   * classe passés au filtre, les 🚩 posés par les élèves et les messages
+   * privés filtrés. Depuis ici on masque, on réécrit ou on supprime.
+   * ---------------------------------------------------------------------- */
+  var FAMILLES_LABEL = {
+    harcelement_sexuel: 'Harcèlement sexuel',
+    menace: 'Menace',
+    discrimination: 'Discrimination',
+    usurpation: 'Usurpation',
+    exclusion: 'Exclusion',
+    rumeur: 'Rumeur',
+    acharnement: 'Acharnement',
+    indirecte: 'Violence indirecte',
+    insulte: 'Insulte'
+  };
+
+  function extra(cle) {
+    if (!etat.extras[cle]) etat.extras[cle] = { donnees: null, chargement: false, erreur: '' };
+    return etat.extras[cle];
+  }
+
+  function prenomDe(id) {
+    var trouve = etat.comptes.filter(function (compte) { return compte.id === id; })[0];
+    return trouve ? trouve.prenom : 'compte supprimé';
+  }
+
+  function familleLabel(cle) {
+    if (!cle) return 'autre';
+    return FAMILLES_LABEL[cle] || String(cle).replace(/_/g, ' ');
+  }
+
+  function chargerExtra(cle, force) {
+    var boite = extra(cle);
+    if (boite.chargement) return Promise.resolve();
+    if (boite.donnees && !force) return Promise.resolve();
+
+    boite.chargement = true;
+    boite.erreur = '';
+    peindre();
+
+    var taches;
+    if (cle === 'moderation') {
+      taches = Promise.all([
+        rpc('class_chat_feed', { p_limit: 200 }),
+        rpc('class_reports_feed', { p_limit: 40 }),
+        rpc('private_flagged', { p_limit: 30 })
+      ]).then(function (res) {
+        if (res[0].error) throw res[0].error;
+        return {
+          messages: (res[0].data || []).filter(function (m) { return m.flagged || m.hidden; }),
+          signalements: res[1].error ? [] : (res[1].data || []),
+          prives: res[2].error ? [] : (res[2].data || [])
+        };
+      });
+    } else if (cle === 'connexions') {
+      taches = rpc('admin_login_attempts', { p_limit: 80 }).then(function (res) {
+        if (res.error) throw res.error;
+        return res.data || {};
+      });
+    } else {
+      taches = Promise.resolve({});
+    }
+
+    return taches.then(function (donnees) {
+      boite.donnees = donnees;
+      boite.chargement = false;
+      peindre();
+    }).catch(function (err) {
+      boite.chargement = false;
+      boite.erreur = messageErreur(err);
+      peindre();
+    });
+  }
+
+  function rechargerExtra(cle) {
+    return chargerExtra(cle, true);
+  }
+
+  function badgeFamille(message) {
+    var familles = message.categories && message.categories.length
+      ? message.categories
+      : (message.motif ? [message.motif] : []);
+    if (!familles.length) return UI.el('span', { class: 'pill pill--muted', text: 'signalé' });
+    return UI.el('span', { class: 'pill pill--danger', text: familleLabel(familles[0]) });
+  }
+
+  function actionsMessage(message, apres) {
+    var id = message.id != null ? message.id : message.message_id;
+
+    return UI.el('div', { class: 'admin-actions' }, [
+      UI.el('button', {
+        type: 'button', class: 'btn btn-ghost btn-sm',
+        text: message.hidden ? 'Réafficher' : 'Masquer',
+        onclick: function () {
+          rpc('admin_message_hide', { p_id: id, p_hidden: !message.hidden }).then(function (res) {
+            if (res.error) { UI.err(messageErreur(res.error)); return; }
+            if (UI.toast) UI.toast(message.hidden ? 'Message réaffiché.' : 'Message masqué.', 'ok');
+            apres();
+          });
+        }
+      }),
+      UI.el('button', {
+        type: 'button', class: 'btn btn-ghost btn-sm', text: 'Modifier',
+        onclick: function () { modifierMessage(id, message.body || message.extrait || '', apres); }
+      }),
+      UI.el('button', {
+        type: 'button', class: 'btn btn-danger btn-sm', text: 'Supprimer',
+        onclick: function () {
+          UI.confirm({
+            title: 'Supprimer ce message ?',
+            message: 'Il disparaîtra pour tout le monde. L’action est définitive.',
+            danger: true,
+            confirmLabel: 'Supprimer'
+          }).then(function (ok) {
+            if (!ok) return;
+            rpc('class_chat_delete', { p_id: id }).then(function (res) {
+              if (res.error) { UI.err(messageErreur(res.error)); return; }
+              if (UI.toast) UI.toast('Message supprimé.', 'ok');
+              apres();
+            });
+          });
+        }
+      })
+    ]);
+  }
+
+  function modifierMessage(id, texte, apres) {
+    var champ = UI.el('textarea', { class: 'input', rows: 4, maxlength: 1000 });
+    champ.value = texte;
+
+    var modale = UI.modal({
+      title: 'Modifier le message',
+      sub: 'La version corrigée remplace le texte pour tout le monde.',
+      eye: 'edit',
+      body: UI.el('div', { class: 'field' }, [
+        UI.el('label', { text: 'Nouveau texte' }),
+        champ
+      ]),
+      footer: [
+        UI.el('button', { type: 'button', class: 'btn btn-ghost', text: 'Annuler', onclick: function () { modale.close(); } }),
+        UI.el('button', {
+          type: 'button', class: 'btn btn-primary', text: 'Enregistrer',
+          onclick: function () {
+            var version = champ.value.trim();
+            if (!version) { UI.err('Le message ne peut pas être vide.'); return; }
+            modale.close();
+            rpc('admin_message_edit', { p_id: id, p_body: version }).then(function (res) {
+              if (res.error) { UI.err(messageErreur(res.error)); return; }
+              if (UI.toast) UI.toast('Message corrigé.', 'ok');
+              apres();
+            });
+          }
+        })
+      ]
+    });
+  }
+
+  function peindreModeration(hote) {
+    var boite = extra('moderation');
+
+    hote.appendChild(UI.el('div', { class: 'admin-barre' }, [
+      UI.el('p', { class: 'sub', text:
+        'Tout ce que le filtre a retenu, les messages signalés par les élèves et les messages privés filtrés.' }),
+      UI.el('button', {
+        type: 'button', class: 'btn btn-ghost btn-sm', text: 'Rafraîchir',
+        onclick: function () { rechargerExtra('moderation'); }
+      })
+    ]));
+
+    if (boite.erreur) hote.appendChild(UI.el('div', { class: 'alert alert--error', text: boite.erreur }));
+
+    if (boite.chargement && !boite.donnees) {
+      hote.appendChild(UI.el('div', { class: 'empty' }, [
+        UI.el('span', { class: 'spinner' }),
+        UI.el('div', { class: 'empty-text', text: 'Chargement des signalements…' })
+      ]));
+      return;
+    }
+
+    var donnees = boite.donnees || { messages: [], signalements: [], prives: [] };
+
+    /* 1. Messages signalés par les élèves (🚩). */
+    var secSignal = UI.el('div', { class: 'panel' });
+    secSignal.appendChild(UI.el('div', { class: 'panel-head' }, [
+      UI.el('div', {}, [
+        UI.el('div', { class: 'panel-title' }, [
+          UI.el('span', {}, [UI.icon('alert', { size: 16 })]),
+          document.createTextNode(' Signalements 🚩')
+        ]),
+        UI.el('div', { class: 'panel-sub', text: donnees.signalements.length + ' message' +
+          (donnees.signalements.length > 1 ? 's' : '') + ' signalé' +
+          (donnees.signalements.length > 1 ? 's' : '') + ' par les élèves' })
+      ])
+    ]));
+    var corpsSignal = UI.el('div', { class: 'panel-body panel-body--flush' });
+    if (!donnees.signalements.length) {
+      corpsSignal.appendChild(UI.el('div', { class: 'empty-text', style: { padding: '14px' }, text: 'Aucun signalement. 👍' }));
+    } else {
+      donnees.signalements.forEach(function (ligne) {
+        corpsSignal.appendChild(UI.el('div', { class: 'admin-ligne' }, [
+          UI.el('div', { class: 'admin-ligne-tete' }, [
+            UI.el('b', { text: ligne.auteur || '—' }),
+            UI.el('span', { class: 'pill pill--danger', text: (ligne.nb || 1) + ' 🚩' }),
+            UI.el('span', { class: 'faint', text: dateCourte(ligne.created_at) })
+          ]),
+          UI.el('p', { class: 'admin-extrait', text: ligne.extrait || '' }),
+          actionsMessage({ id: ligne.message_id, body: ligne.extrait, hidden: false }, function () {
+            rechargerExtra('moderation');
+          })
+        ]));
+      });
+    }
+    secSignal.appendChild(corpsSignal);
+    hote.appendChild(secSignal);
+
+    /* 2. Messages du tchat de classe retenus par le filtre. */
+    var secFiltre = UI.el('div', { class: 'panel' });
+    secFiltre.appendChild(UI.el('div', { class: 'panel-head' }, [
+      UI.el('div', {}, [
+        UI.el('div', { class: 'panel-title' }, [
+          UI.el('span', {}, [UI.icon('filter', { size: 16 })]),
+          document.createTextNode(' Messages filtrés (tchat de classe)')
+        ]),
+        UI.el('div', { class: 'panel-sub', text: donnees.messages.length + ' message' +
+          (donnees.messages.length > 1 ? 's' : '') + ' à surveiller' })
+      ])
+    ]));
+    var corpsFiltre = UI.el('div', { class: 'panel-body panel-body--flush' });
+    if (!donnees.messages.length) {
+      corpsFiltre.appendChild(UI.el('div', { class: 'empty-text', style: { padding: '14px' }, text: 'Rien à surveiller pour le moment.' }));
+    } else {
+      donnees.messages.forEach(function (message) {
+        corpsFiltre.appendChild(UI.el('div', {
+          class: 'admin-ligne' + (message.hidden ? ' is-muted' : '')
+        }, [
+          UI.el('div', { class: 'admin-ligne-tete' }, [
+            UI.el('b', { text: prenomDe(message.author_id) }),
+            badgeFamille(message),
+            message.severity ? UI.el('span', { class: 'pill pill--muted', text: 'sévérité ' + message.severity }) : null,
+            message.hidden ? UI.el('span', { class: 'pill pill--danger', text: 'masqué' }) : null,
+            UI.el('span', { class: 'faint', text: dateCourte(message.created_at) })
+          ]),
+          UI.el('p', { class: 'admin-extrait', text: (message.body || '').slice(0, 240) }),
+          message.cible ? UI.el('p', { class: 'faint', text: 'Cible : ' + message.cible }) : null,
+          actionsMessage(message, function () { rechargerExtra('moderation'); })
+        ]));
+      });
+    }
+    secFiltre.appendChild(corpsFiltre);
+    hote.appendChild(secFiltre);
+
+    /* 3. Messages privés filtrés. */
+    if (donnees.prives && donnees.prives.length) {
+      var secPrive = UI.el('div', { class: 'panel' });
+      secPrive.appendChild(UI.el('div', { class: 'panel-head' }, [
+        UI.el('div', {}, [
+          UI.el('div', { class: 'panel-title' }, [
+            UI.el('span', {}, [UI.icon('mail', { size: 16 })]),
+            document.createTextNode(' Messages privés filtrés')
+          ]),
+          UI.el('div', { class: 'panel-sub', text: donnees.prives.length + ' échange' +
+            (donnees.prives.length > 1 ? 's' : '') + ' entre élèves' })
+        ])
+      ]));
+      var corpsPrive = UI.el('div', { class: 'panel-body panel-body--flush' });
+      donnees.prives.forEach(function (ligne) {
+        corpsPrive.appendChild(UI.el('div', { class: 'admin-ligne' }, [
+          UI.el('div', { class: 'admin-ligne-tete' }, [
+            UI.el('b', { text: (ligne.sender || '?') + ' → ' + (ligne.recipient || '?') }),
+            badgeFamille(ligne),
+            UI.el('span', { class: 'faint', text: dateCourte(ligne.created_at) })
+          ]),
+          UI.el('p', { class: 'admin-extrait', text: ligne.excerpt || '' }),
+          UI.el('div', { class: 'admin-actions' }, [
+            UI.el('button', {
+              type: 'button', class: 'btn btn-danger btn-sm', text: 'Supprimer',
+              onclick: function () {
+                UI.confirm({
+                  title: 'Supprimer ce message privé ?',
+                  message: 'Il disparaîtra de la conversation des deux élèves.',
+                  danger: true,
+                  confirmLabel: 'Supprimer'
+                }).then(function (ok) {
+                  if (!ok) return;
+                  rpc('private_delete', { p_id: ligne.id }).then(function (res) {
+                    if (res.error) { UI.err(messageErreur(res.error)); return; }
+                    if (UI.toast) UI.toast('Message privé supprimé.', 'ok');
+                    rechargerExtra('moderation');
+                  });
+                });
+              }
+            })
+          ])
+        ]));
+      });
+      secPrive.appendChild(corpsPrive);
+      hote.appendChild(secPrive);
+    }
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Qui essaie de se connecter                                             */
+  /* ---------------------------------------------------------------------- */
+  function peindreConnexions(hote) {
+    var boite = extra('connexions');
+
+    hote.appendChild(UI.el('div', { class: 'admin-barre' }, [
+      UI.el('p', { class: 'sub', text:
+        'Chaque tentative de connexion est enregistrée : prénom, réussite, appareil et date. ' +
+        'Au bout de 5 échecs en 15 minutes, le prénom est bloqué un quart d’heure.' }),
+      UI.el('div', { class: 'admin-actions' }, [
+        UI.el('button', {
+          type: 'button', class: 'btn btn-ghost btn-sm', text: 'Rafraîchir',
+          onclick: function () { rechargerExtra('connexions'); }
+        }),
+        UI.el('button', {
+          type: 'button', class: 'btn btn-danger btn-sm', text: 'Purger le journal',
+          onclick: function () {
+            UI.confirm({
+              title: 'Vider le journal des connexions ?',
+              message: 'Toutes les tentatives enregistrées seront effacées, et les blocages levés.',
+              danger: true,
+              confirmLabel: 'Purger'
+            }).then(function (ok) {
+              if (!ok) return;
+              rpc('admin_clear_login_attempts').then(function (res) {
+                if (res.error) { UI.err(messageErreur(res.error)); return; }
+                if (UI.toast) UI.toast('Journal purgé (' + (res.data || 0) + ' lignes).', 'ok');
+                rechargerExtra('connexions');
+              });
+            });
+          }
+        })
+      ])
+    ]));
+
+    if (boite.erreur) hote.appendChild(UI.el('div', { class: 'alert alert--error', text: boite.erreur }));
+
+    if (boite.chargement && !boite.donnees) {
+      hote.appendChild(UI.el('div', { class: 'empty' }, [
+        UI.el('span', { class: 'spinner' }),
+        UI.el('div', { class: 'empty-text', text: 'Chargement du journal…' })
+      ]));
+      return;
+    }
+
+    var donnees = boite.donnees || {};
+    var essais = donnees.essais || [];
+    var liste = donnees.liste || [];
+
+    var secEssais = UI.el('div', { class: 'panel' });
+    secEssais.appendChild(UI.el('div', { class: 'panel-head' }, [
+      UI.el('div', {}, [
+        UI.el('div', { class: 'panel-title' }, [
+          UI.el('span', {}, [UI.icon('shield', { size: 16 })]),
+          document.createTextNode(' Prénoms qui échouent')
+        ]),
+        UI.el('div', { class: 'panel-sub', text: essais.length + ' prénom' + (essais.length > 1 ? 's' : '') + ' avec au moins un échec (30 derniers jours)' })
+      ])
+    ]));
+    var corpsEssais = UI.el('div', { class: 'panel-body panel-body--flush' });
+    if (!essais.length) {
+      corpsEssais.appendChild(UI.el('div', { class: 'empty-text', style: { padding: '14px' }, text: 'Aucun échec de connexion. 👍' }));
+    } else {
+      essais.forEach(function (ligne) {
+        corpsEssais.appendChild(UI.el('div', { class: 'admin-ligne' }, [
+          UI.el('div', { class: 'admin-ligne-tete' }, [
+            UI.el('b', { text: ligne.prenom || '—' }),
+            ligne.bloque ? UI.el('span', { class: 'pill pill--danger', text: 'bloqué' }) : null,
+            UI.el('span', { class: 'pill pill--muted', text: (ligne.echecs || 0) + ' échec' + ((ligne.echecs || 0) > 1 ? 's' : '') }),
+            UI.el('span', { class: 'pill pill--ok', text: (ligne.succes || 0) + ' réussie' + ((ligne.succes || 0) > 1 ? 's' : '') }),
+            UI.el('span', { class: 'faint', text: dateCourte(ligne.dernier) })
+          ])
+        ]));
+      });
+    }
+    secEssais.appendChild(corpsEssais);
+    hote.appendChild(secEssais);
+
+    var secJournal = UI.el('div', { class: 'panel' });
+    secJournal.appendChild(UI.el('div', { class: 'panel-head' }, [
+      UI.el('div', {}, [
+        UI.el('div', { class: 'panel-title' }, [
+          UI.el('span', {}, [UI.icon('clock', { size: 16 })]),
+          document.createTextNode(' Dernières tentatives')
+        ]),
+        UI.el('div', { class: 'panel-sub', text: liste.length + ' tentative' + (liste.length > 1 ? 's' : '') + ' enregistrée' + (liste.length > 1 ? 's' : '') })
+      ])
+    ]));
+
+    var table = UI.el('div', { class: 'admin-table' });
+    if (!liste.length) {
+      table.appendChild(UI.el('div', { class: 'empty-text', style: { padding: '14px' }, text: 'Journal vide.' }));
+    } else {
+      liste.forEach(function (ligne) {
+        table.appendChild(UI.el('div', { class: 'admin-table-ligne' }, [
+          UI.el('span', { class: 'admin-table-nom', text: ligne.prenom || '—' }),
+          UI.el('span', {
+            class: 'pill ' + (ligne.ok ? 'pill--ok' : 'pill--danger'),
+            text: ligne.ok ? 'connecté' : 'refusé'
+          }),
+          UI.el('span', { class: 'admin-table-agent', title: ligne.agent || '', text: agentCourt(ligne.agent) }),
+          UI.el('span', { class: 'faint', text: dateCourte(ligne.at) })
+        ]));
+      });
+    }
+    secJournal.appendChild(UI.el('div', { class: 'panel-body panel-body--flush' }, [table]));
+    hote.appendChild(secJournal);
+  }
+
+  function agentCourt(agent) {
+    var texte = String(agent || '');
+    if (!texte) return 'appareil inconnu';
+    if (/android/i.test(texte)) return 'Android';
+    if (/iphone|ipad|ios/i.test(texte)) return 'iPhone / iPad';
+    if (/windows/i.test(texte)) return 'Windows';
+    if (/macintosh|mac os/i.test(texte)) return 'Mac';
+    if (/linux/i.test(texte)) return 'Linux';
+    return texte.slice(0, 28) + (texte.length > 28 ? '…' : '');
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Rapport de climat                                                      */
+  /* ---------------------------------------------------------------------- */
+  function peindreClimat(hote) {
+    /* Le rapport vit dans son propre module : il est aussi accessible depuis
+       l'onglet « Climat » de la navigation, pour l'encadrement. */
+    if (window.ECEM && window.ECEM.Climat) {
+      window.ECEM.Climat.mount(hote);
+      return;
+    }
+
+    hote.appendChild(UI.el('div', { class: 'empty' }, [
+      UI.el('span', { class: 'empty-ico' }, [UI.icon('chart', { size: 26 })]),
+      UI.el('div', { class: 'empty-title', text: 'Rapport indisponible' }),
+      UI.el('div', { class: 'empty-text', text: 'Le module du rapport de climat n’a pas pu se charger.' })
+    ]));
+  }
+
   function peindre() {
     if (!dom.hote) return;
     UI.clear(dom.hote);
@@ -448,7 +891,8 @@
 
     dom.hote.appendChild(UI.el('div', { class: 'admin-tete' }, [
       UI.el('h2', { class: 'admin-titre', text: 'Administration' }),
-      UI.el('p', { class: 'sub', text: 'Suspendre, réactiver, changer de rôle ou supprimer un compte.' })
+      UI.el('p', { class: 'sub', text:
+        'Comptes, codes d’inscription, modération centralisée, tentatives de connexion et rapport de climat.' })
     ]));
 
     dom.hote.appendChild(UI.el('div', { class: 'admin-stats' }, [
@@ -465,7 +909,10 @@
 
     var onglets = UI.el('div', { class: 'seg admin-seg' }, [
       boutonOnglet('comptes', 'Comptes'),
-      boutonOnglet('codes', 'Codes d’inscription')
+      boutonOnglet('codes', 'Codes'),
+      boutonOnglet('moderation', 'Modération'),
+      boutonOnglet('connexions', 'Connexions'),
+      boutonOnglet('climat', 'Climat')
     ]);
     dom.hote.appendChild(onglets);
 
@@ -478,6 +925,9 @@
     }
 
     if (etat.onglet === 'codes') peindreCodes(dom.hote);
+    else if (etat.onglet === 'moderation') peindreModeration(dom.hote);
+    else if (etat.onglet === 'connexions') peindreConnexions(dom.hote);
+    else if (etat.onglet === 'climat') peindreClimat(dom.hote);
     else peindreComptes(dom.hote);
   }
 
@@ -496,6 +946,9 @@
       onclick: function () {
         etat.onglet = cle;
         peindre();
+        if (cle === 'moderation' || cle === 'connexions') {
+          chargerExtra(cle);
+        }
       }
     });
   }

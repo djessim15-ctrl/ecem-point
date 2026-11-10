@@ -60,12 +60,14 @@
     staff: [
       { id: 'home', label: 'Accueil', icon: 'home', group: 'Classe' },
       { id: 'give', label: 'Donner / retirer', icon: 'gift', group: 'Classe' },
+      { id: 'send', label: 'Envoyer mes points', icon: 'send', group: 'Classe' },
       { id: 'rank', label: 'Classement', icon: 'trophy', group: 'Classe' },
       { id: 'history', label: 'Historique de la classe', icon: 'history', group: 'Classe' },
       { id: 'stats', label: 'Statistiques', icon: 'chart', group: 'Analyse' },
       { id: 'badges', label: 'Succès', icon: 'award', group: 'Analyse' },
       { id: 'chat', label: 'Tchat encadrement', icon: 'chat', group: 'Encadrement' },
       { id: 'tchat', label: 'Tchat de classe', icon: 'chat', group: 'Encadrement' },
+      { id: 'climat', label: 'Climat de la classe', icon: 'pulse', group: 'Encadrement' },
       { id: 'profile', label: 'Profil & réglages', icon: 'user', group: 'Compte' }
     ]
   };
@@ -367,7 +369,7 @@
 
     /* Le bouton flottant ne sert à rien sur les écrans d'action ou de saisie. */
     if (dom.fab) {
-      dom.fab.hidden = ['give', 'send', 'chat', 'tchat', 'profile', 'admin'].indexOf(state.tab) !== -1;
+      dom.fab.hidden = ['give', 'send', 'chat', 'tchat', 'climat', 'profile', 'admin'].indexOf(state.tab) !== -1;
     }
 
     if (state.tab === 'chat') {
@@ -399,7 +401,6 @@
   function paintIdentity() {
     var me = Store.state.me;
     if (!me) return;
-    var isEleve = Store.isEleve();
 
     /* barre latérale */
     UI.clear(dom.sideUser);
@@ -417,9 +418,9 @@
       onclick: function () { showTab('profile'); }
     }, [UI.icon('chevron-right', { size: 16 })]));
 
-    /* pastille de points */
-    dom.mePoints.hidden = !isEleve;
-    if (isEleve) dom.mePointsValue.textContent = String(me.points);
+    /* pastille de points (visible pour tous les rôles) */
+    dom.mePoints.hidden = false;
+    dom.mePointsValue.textContent = String(me.points);
     dom.mePoints.title = UI.pointsLabel(me.points) + ' disponibles';
 
     /* chip du haut */
@@ -455,17 +456,16 @@
       var profile = Store.profileById(card.dataset.id);
       if (profile) card.classList.toggle('is-offline', !Store.isOnline(profile));
     });
-    if (Store.isEleve()) {
-      dom.mePointsValue.textContent = String(Store.myPoints());
-      if (dom.sideUser.querySelector('.dot')) {
-        dom.sideUser.querySelector('.dot').classList.toggle('is-online', Store.isOnline(Store.state.me));
-      }
+    /* Tout le monde a un solde : élèves, délégués et suppléants. */
+    if (dom.mePointsValue) dom.mePointsValue.textContent = String(Store.myPoints());
+    if (dom.sideUser.querySelector('.dot')) {
+      dom.sideUser.querySelector('.dot').classList.toggle('is-online', Store.isOnline(Store.state.me));
     }
   }
 
   function paintFooter() {
-    var students = Store.students();
-    var online = Store.onlineStudents().length;
+    var students = Store.members();
+    var online = Store.onlineMembers().length;
     if (dom.footerStats) {
       dom.footerStats.textContent = online + '/' + students.length + ' en ligne';
     }
@@ -718,6 +718,7 @@
         case 'chat': renderChat(); break;
         case 'tchat': renderTchat(); break;
         case 'profile': renderProfile(); break;
+        case 'climat': renderClimat(); break;
         case 'admin': renderAdmin(); break;
         default: renderHome();
       }
@@ -979,7 +980,7 @@
       });
 
       var rank = Store.rankOf(me.id);
-      var totalStudents = Store.students().length;
+      var totalStudents = Store.members().length;
       var net = receivedWeek - sentWeek - removedWeek;
       var streak = Insights.streak(events, me.id);
       var goal = Math.min(100, Math.round((receivedWeek / WEEKLY_GOAL) * 100));
@@ -1091,7 +1092,7 @@
 
     /* ---------------------------- encadrement ---------------------------- */
     var students = Store.students();
-    var online = Store.onlineStudents();
+    var online = Store.onlineMembers();
     var distributed = week.reduce(function (total, day) { return total + day.gain; }, 0);
     var messagesCount = Store.state.messages.length;
 
@@ -1099,10 +1100,10 @@
       UI.el('span', { class: 'hero-greet' }, [UI.icon('sparkles', { size: 14 }), document.createTextNode('Bonjour ' + me.prenom)]),
       UI.el('div', { class: 'hero-points' }, [
         UI.el('span', { class: 'hero-value', text: String(online.length) }),
-        UI.el('span', { class: 'hero-unit', text: 'élève' + (online.length > 1 ? 's' : '') + ' en ligne' })
+        UI.el('span', { class: 'hero-unit', text: 'connecté' + (online.length > 1 ? 's' : '') })
       ]),
       UI.el('div', { class: 'hero-meta' }, [
-        pill(students.length + ' inscrits', 'gold', 'users'),
+        pill(Store.members().length + ' inscrits', 'gold', 'users'),
         pill(Store.totalPoints() + ' points en circulation', null, 'star'),
         pill(Store.canAward() ? 'droit de modifier' : 'lecture seule', null, 'shield')
       ]),
@@ -1139,6 +1140,36 @@
       statCard({ icon: 'gift', tone: 'blue', value: String(distributed), label: 'Distribués en 7 jours' })
     ]));
 
+    /* Mon compteur : depuis la migration 0020, les délégués et les suppléants
+       gagnent eux aussi des points. */
+    var monRang = Store.rankOf(me.id);
+    dash.appendChild(panel({
+      title: 'Mes points',
+      icon: 'star',
+      sub: 'Tu peux gagner des points comme tout le monde.',
+      class: 'span-12',
+      content: UI.el('div', { class: 'row', style: { gap: '10px', alignItems: 'center', flexWrap: 'wrap' } }, [
+        UI.el('div', { class: 'mini-stat' }, [
+          UI.el('b', { text: String(me.points), dataset: { heroPoints: '1' } }),
+          UI.el('span', { text: 'point' + (me.points > 1 ? 's' : '') + ' en poche' })
+        ]),
+        UI.el('div', { class: 'mini-stat' }, [
+          UI.el('b', { text: monRang ? '#' + monRang : '—' }),
+          UI.el('span', { text: 'sur ' + Store.members().length + ' au classement' })
+        ]),
+        UI.el('button', {
+          type: 'button', class: 'btn btn-ghost btn-sm',
+          onclick: function () { showTab('rank'); }
+        }, [UI.icon('trophy', { size: 15 }), document.createTextNode('Voir le classement')])
+      ])
+    }));
+
+    if (window.ECEM.Progress) {
+      dash.appendChild(window.ECEM.Progress.carteRoue(me, function () {
+        Store.refreshProfiles().then(function () { renderCurrent(); }).catch(function () {});
+      }));
+    }
+
     if (!Store.canAward()) {
       dash.appendChild(UI.el('div', { class: 'notice span-12' }, [
         UI.icon('info', { size: 17 }),
@@ -1154,7 +1185,7 @@
     dash.appendChild(panel({
       title: 'À récompenser',
       icon: 'zap',
-      sub: online.length ? 'Les élèves connectés, prêts à recevoir des points' : 'Personne n’est connecté pour le moment',
+      sub: online.length ? 'Les personnes connectées, prêtes à recevoir des points' : 'Personne n’est connecté pour le moment',
       action: UI.el('button', {
         type: 'button', class: 'link', onclick: function () { showTab('give'); }
       }, [document.createTextNode('Tout voir'), UI.icon('chevron-right', { size: 14 })]),
@@ -1220,9 +1251,15 @@
     return wrap;
   }
 
+  /* Petit rappel du rôle quand un délégué ou un suppléant figure au classement. */
+  function roleTag(profile) {
+    if (!profile || profile.role === 'eleve') return null;
+    return UI.el('span', { class: 'pill pill--muted', text: UI.roleLabel(profile.role) });
+  }
+
   function top3List() {
     var top = Store.sortByPoints().slice(0, 3);
-    if (!top.length) return emptyState('users', 'Classe vide', 'Aucun élève inscrit pour l’instant.');
+    if (!top.length) return emptyState('users', 'Classe vide', 'Personne d’inscrit pour l’instant.');
     var list = UI.el('div', { class: 'top3' });
     top.forEach(function (profile, index) {
       list.appendChild(UI.el('button', {
@@ -1231,7 +1268,10 @@
       }, [
         UI.el('span', { class: 'top3-pos', text: String(index + 1) }),
         UI.avatar(profile.prenom, { size: 30 }),
-        UI.el('span', { class: 'top3-name', text: profile.prenom + (profile.id === Store.state.me.id ? ' (toi)' : '') }),
+        UI.el('span', { class: 'top3-name' }, [
+          document.createTextNode(profile.prenom + (profile.id === Store.state.me.id ? ' (toi)' : '')),
+          roleTag(profile)
+        ]),
         UI.el('span', { class: 'top3-pts', text: profile.points + ' pts' })
       ]));
     });
@@ -1240,7 +1280,7 @@
 
   function quickAwardList(students) {
     if (!students.length) {
-      return emptyState('moon', 'Personne en ligne', 'Dès qu’un élève se connecte, il apparaît ici pour recevoir des points en un geste.');
+      return emptyState('moon', 'Personne en ligne', 'Dès que quelqu’un se connecte, il apparaît ici pour recevoir des points en un geste.');
     }
 
     var list = UI.el('div', { class: 'top3' });
@@ -1337,7 +1377,7 @@
     var term = UI.normalize(opts.searchInput && opts.searchInput.value || '');
     var onlineOnly = !!(opts.onlineBox && opts.onlineBox.checked);
 
-    var list = Store.students()
+    var list = Store.members()
       .filter(function (profile) { return profile.id !== Store.state.me.id; })
       .filter(function (profile) { return !onlineOnly || Store.isOnline(profile); })
       .filter(function (profile) { return !term || UI.normalize(profile.prenom).indexOf(term) >= 0; })
@@ -1357,13 +1397,13 @@
     UI.clear(host);
 
     if (opts.countNode) {
-      opts.countNode.textContent = list.length + ' élève' + (list.length > 1 ? 's' : '') + ' affiché' + (list.length > 1 ? 's' : '');
+      opts.countNode.textContent = list.length + ' membre' + (list.length > 1 ? 's' : '') + ' affiché' + (list.length > 1 ? 's' : '');
     }
 
     if (!list.length) {
       var text = onlineOnly
-        ? 'Aucun élève connecté pour l’instant. Décoche « Connectés » pour voir toute la classe.'
-        : term ? 'Personne ne correspond à « ' + term + ' ».' : 'Aucun élève inscrit pour le moment.';
+        ? 'Personne n’est connecté pour l’instant. Décoche « Connectés » pour voir tout le monde.'
+        : term ? 'Personne ne correspond à « ' + term + ' ».' : 'Aucun membre inscrit pour le moment.';
       host.appendChild(emptyState('users', 'Personne à afficher', text));
       return;
     }
@@ -1499,7 +1539,7 @@
     var scope = state.rankScope;
     var weekly = Insights.weeklyNetByStudent(Store.state.events);
 
-    var rows = Store.students().map(function (profile) {
+    var rows = Store.members().map(function (profile) {
       return {
         profile: profile,
         points: scope === 'week' ? (weekly[profile.id] || 0) : profile.points
@@ -1521,7 +1561,10 @@
         UI.el('span', { class: 'podium-medal', text: String(place) }),
         UI.avatar(row.profile.prenom, { size: 52 }),
         UI.el('div', { class: 'podium-info' }, [
-          UI.el('div', { class: 'podium-name', text: row.profile.prenom }),
+          UI.el('div', { class: 'podium-name' }, [
+            document.createTextNode(row.profile.prenom),
+            roleTag(row.profile)
+          ]),
           UI.el('div', { class: 'podium-pts' }, [
             document.createTextNode(scope === 'week' ? UI.fmtSigned(row.points) : String(row.points)),
             UI.el('small', { text: ' pts' })
@@ -1545,8 +1588,8 @@
     });
 
     UI.$('#rank-sub').textContent =
-      (scope === 'week' ? 'Points gagnés sur les 7 derniers jours' : 'Solde actuel de chaque élève') +
-      ' · ' + rows.length + ' élève' + (rows.length > 1 ? 's' : '');
+      (scope === 'week' ? 'Points gagnés sur les 7 derniers jours' : 'Solde actuel de chacun') +
+      ' · ' + rows.length + ' membre' + (rows.length > 1 ? 's' : '');
 
     if (!filtered.length) {
       host.appendChild(emptyState('search', 'Aucun résultat', 'Aucun prénom ne correspond à « ' + state.rankFilter + ' ».'));
@@ -1570,6 +1613,7 @@
           UI.el('div', { style: { minWidth: '0', flex: '1' } }, [
             UI.el('div', { class: 'rank-name' }, [
               document.createTextNode(profile.prenom),
+              roleTag(profile),
               isMe ? UI.el('span', { class: 'pill pill--muted', text: 'toi' }) : null
             ]),
             UI.el('div', { class: 'rank-sub' }, [
@@ -1600,7 +1644,7 @@
     var events = Store.state.events;
     var week = Insights.weekSeries(events);
     var totals = Insights.kindTotals(events);
-    var students = Store.students();
+    var students = Store.members();
     var hours = Insights.hourActivity(events);
     var busiest = Insights.busiestHour(hours);
     var average = students.length ? Math.round(Store.totalPoints() / students.length) : 0;
@@ -1614,7 +1658,7 @@
 
     wrap.appendChild(UI.el('div', { class: 'kpis' }, [
       statCard({ icon: 'star', tone: 'gold', value: String(Store.totalPoints()), label: 'Points en circulation' }),
-      statCard({ icon: 'users', tone: 'violet', value: String(average), label: 'Moyenne par élève' }),
+      statCard({ icon: 'users', tone: 'violet', value: String(average), label: 'Moyenne par membre' }),
       statCard({ icon: 'trending', tone: 'green', value: '+' + weekGain, label: 'Gains sur 7 jours' }),
       statCard({ icon: 'arrow-down', tone: 'rose', value: '−' + weekLose, label: 'Retraits sur 7 jours' }),
       statCard({ icon: 'send', tone: 'blue', value: String(weekTransfer), label: 'Échanges sur 7 jours' })
@@ -1712,8 +1756,8 @@
         : 'Pas encore assez de données pour dégager une tendance.' }));
     wrap.appendChild(heatCard);
 
-    /* Focus personnel */
-    if (Store.isEleve()) {
+    /* Focus personnel : chaque rôle gagne des points, chacun a donc son focus. */
+    if (Store.state.me) {
       var me = Store.state.me;
       var mine = panel({ title: 'Ma semaine en un coup d’œil', icon: 'target' });
       var body = mine.querySelector('.panel-body');
@@ -1760,7 +1804,7 @@
 
     UI.clear(host);
 
-    if (Store.isEleve() && window.ECEM.Progress) {
+    if (window.ECEM.Progress) {
       host.appendChild(window.ECEM.Progress.carteDonneurs(
         Store.state.events,
         Store.state.me,
@@ -1790,6 +1834,37 @@
   /* ---------------------------------------------------------------------- */
   /* ADMINISTRATION                                                         */
   /* ---------------------------------------------------------------------- */
+  /* ---------------------------------------------------------------------- */
+  /* CLIMAT DE LA CLASSE                                                    */
+  /* ---------------------------------------------------------------------- */
+  function renderClimat() {
+    var host = document.getElementById('climat-content') || document.getElementById('view-climat');
+    if (!host) return;
+
+    if (!Store.isStaff || !Store.isStaff()) {
+      UI.clear(host);
+      host.appendChild(UI.el('div', { class: 'empty' }, [
+        UI.el('span', { class: 'empty-ico' }, [UI.icon('lock', { size: 26 })]),
+        UI.el('div', { class: 'empty-title', text: 'Accès réservé' }),
+        UI.el('div', { class: 'empty-text', text:
+          'Le rapport de climat est réservé à l’encadrement de la classe.' })
+      ]));
+      return;
+    }
+
+    if (window.ECEM && window.ECEM.Climat) {
+      window.ECEM.Climat.mount(host);
+      return;
+    }
+
+    UI.clear(host);
+    host.appendChild(UI.el('div', { class: 'empty' }, [
+      UI.el('span', { class: 'empty-ico' }, [UI.icon('chart', { size: 26 })]),
+      UI.el('div', { class: 'empty-title', text: 'Rapport indisponible' }),
+      UI.el('div', { class: 'empty-text', text: 'Le module du rapport de climat n’a pas pu se charger.' })
+    ]));
+  }
+
   function renderAdmin() {
     var host = document.getElementById('admin-content') || document.getElementById('view-admin');
     if (!host) return;
@@ -1863,6 +1938,11 @@
     });
 
     host.appendChild(grid);
+
+    /* Collection de cartes : un paquet par semaine, doublons comptés. */
+    var cartesHote = UI.el('div', { class: 'cartes-hote' });
+    host.appendChild(cartesHote);
+    if (window.ECEM.Cards) window.ECEM.Cards.mount(cartesHote);
   }
 
   /* ---------------------------------------------------------------------- */
@@ -2023,7 +2103,6 @@
     UI.clear(host);
 
     var me = Store.state.me;
-    var isEleve = Store.isEleve();
     var memberSince = me.created_at ? UI.monthYear(me.created_at) : '—';
 
     var heroCard = UI.el('div', { class: 'profile-hero' }, [
@@ -2036,12 +2115,9 @@
           Store.isOnline(me) ? UI.el('span', { class: 'pill pill--green' }, [UI.icon('pulse', { size: 12 }), document.createTextNode('en ligne')]) : null
         ])
       ]),
-      isEleve ? UI.el('div', { style: { textAlign: 'right' } }, [
+      UI.el('div', { style: { textAlign: 'right' } }, [
         UI.el('div', { class: 'profile-name', style: { fontSize: '2rem' }, text: String(me.points) }),
-        UI.el('div', { class: 'faint', text: 'points · ' + (Store.rankOf(me.id) || '—') + 'e de la classe' })
-      ]) : UI.el('div', { style: { textAlign: 'right' } }, [
-        UI.el('div', { class: 'profile-name', style: { fontSize: '2rem' }, text: String(Insights.givenBy(Store.state.events, me.id)) }),
-        UI.el('div', { class: 'faint', text: 'points distribués' })
+        UI.el('div', { class: 'faint', text: 'points · ' + (Store.rankOf(me.id) || '—') + 'e au classement' })
       ])
     ]);
     host.appendChild(heroCard);
@@ -2146,6 +2222,18 @@
         }
       })
     ]));
+
+    /* QR de partage : fabriqué sur l'appareil, donc utilisable hors-ligne. */
+    if (window.ECEM.QR) {
+      dataBody.appendChild(UI.el('div', { class: 'pref-row' }, [
+        UI.el('span', { class: 'pref-ico' }, [UI.icon('share', { size: 17 })]),
+        UI.el('div', { style: { flex: '1' } }, [
+          UI.el('div', { class: 'pref-label', text: 'QR code de la classe' }),
+          UI.el('div', { class: 'pref-desc', text: 'À faire scanner par un camarade : il arrive sur la page d’inscription.' })
+        ]),
+        window.ECEM.QR.bouton({ class: 'btn btn-ghost btn-sm pref-action', label: 'Afficher' })
+      ]));
+    }
 
     if (Store.state.demo) {
       dataBody.appendChild(UI.el('div', { class: 'pref-row' }, [
@@ -2363,8 +2451,8 @@
     var steps = [
       ['Un prénom, un compte', 'Chaque prénom est unique dans la classe : c’est ton identifiant.'],
       ['Les points', 'Les délégués donnent 1 à 4 points et peuvent en retirer. Un solde ne descend jamais sous zéro.'],
-      ['Les échanges', 'Un élève peut envoyer ses points à un camarade, dans la limite de son solde.'],
-      ['Les rôles', 'Élève : reçoit et envoie. Suppléant : suit la classe, tchat. Délégué : distribue les points, tchat.'],
+      ['Les échanges', 'Chacun peut envoyer ses points à un camarade, dans la limite de son solde.'],
+      ['Les rôles', 'Élève : reçoit et envoie. Suppléant : suit la classe, distribue les points si le réglage l’autorise. Délégué : distribue les points. Tout le monde gagne des points et figure au classement.'],
       ['La sécurité', 'Aucune écriture directe : tout passe par des fonctions SQL vérifiées côté serveur.']
     ];
     var body = UI.el('div', { class: 'stack', style: { gap: '14px' } });
@@ -2655,7 +2743,7 @@
     var events = Store.state.events.filter(function (event) {
       return event.subject_id === profile.id || event.counterparty_id === profile.id || event.actor_id === profile.id;
     });
-    var rank = profile.role === 'eleve' ? Store.rankOf(profile.id) : 0;
+    var rank = Store.rankOf(profile.id);
 
     var stats = UI.el('div', { class: 'student-modal-stats' }, [
       UI.el('div', { class: 'mini-stat' }, [
@@ -2699,7 +2787,7 @@
       ]));
     }
 
-    if (Store.isEleve() && profile.role === 'eleve' && profile.id !== me.id && me.points > 0) {
+    if (profile.id !== me.id && me.points > 0) {
       actions.push(UI.el('div', { style: { marginTop: '12px' } }, [
         UI.el('button', {
           type: 'button', class: 'btn btn-ghost btn-sm',
@@ -2725,7 +2813,7 @@
     ].concat(actions));
 
     var modal = UI.modal({
-      title: 'Fiche élève',
+      title: 'Fiche de ' + profile.prenom,
       sub: 'Points, rang et derniers mouvements.',
       eye: 'user',
       body: body,
@@ -2793,9 +2881,9 @@
       { group: 'Actions', label: 'Se déconnecter', icon: 'logout', run: logout }
     );
 
-    Store.students().forEach(function (profile) {
+    Store.members().forEach(function (profile) {
       commands.push({
-        group: 'Élèves', label: profile.prenom, icon: 'user',
+        group: 'Membres', label: profile.prenom, icon: 'user',
         sub: profile.points + ' pts',
         run: function () { openStudent(profile.id); }
       });
@@ -2965,4 +3053,15 @@
       });
     });
   }
+
+  /* ---------------------------------------------------------------------- */
+  /* API interne                                                            */
+  /* ---------------------------------------------------------------------- */
+  /* Permet à d'autres modules (le tchat par exemple) d'ouvrir un écran sans
+     dépendre des éléments du DOM de la page. */
+  window.ECEM.App = {
+    showTab: showTab,
+    tab: function () { return state.tab; },
+    refresh: function () { renderCurrent(); }
+  };
 })();

@@ -1254,10 +1254,6 @@
       meta.push(UI.el('span', { class: 'tchat-badge tchat-badge--annonce', title: 'Annonce de l’encadrement', text: '📣 annonce' }));
     }
 
-    if (message.edited_at) {
-      meta.push(UI.el('span', { class: 'tchat-badge tchat-badge--edit', title: 'Message modifié par un administrateur', text: 'modifié' }));
-    }
-
     if (message.hidden) {
       meta.push(UI.el('span', { class: 'tchat-badge tchat-badge--masque', title: 'Message masqué : invisible pour les autres', text: 'masqué' }));
     }
@@ -1813,6 +1809,25 @@
         ]),
         UI.el('p', { class: 'sub climat-resume', text: resumeSemaine(climat) })
       ]));
+
+      /* Accès direct au rapport complet, pour l'encadrement. */
+      if (estStaff() || estAdmin()) {
+        hote.appendChild(UI.el('div', { class: 'climat-lien' }, [
+          UI.el('button', {
+            type: 'button', class: 'btn btn-ghost btn-sm',
+            onclick: function () {
+              if (window.ECEM && window.ECEM.App && window.ECEM.App.showTab) {
+                window.ECEM.App.showTab('climat');
+              } else {
+                window.location.hash = 'climat';
+              }
+            }
+          }, [
+            UI.icon('chart', { size: 15 }),
+            document.createTextNode(' Voir le rapport de climat complet')
+          ])
+        ]));
+      }
 
       if ((estStaff() || estAdmin()) && Number(climat.nb_paires) > 0) {
         hote.appendChild(UI.el('div', { class: 'tchat-alerte' }, [

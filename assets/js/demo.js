@@ -464,7 +464,171 @@
     };
   }
 
+  /* Cartes à collectionner, anti-bruteforce et climat : versions démo. */
+  var CATALOGUE_DEMO = [
+    { code: 'cartable', nom: 'Le Cartable', rarete: 'commune', emoji: '🎒', description: 'Toujours prêt, jamais léger.', teinte: 'bleu' },
+    { code: 'gomme', nom: 'La Gomme', rarete: 'commune', emoji: '🧽', description: 'Efface les erreurs, pas les efforts.', teinte: 'vert' },
+    { code: 'stylo', nom: 'Le Stylo', rarete: 'commune', emoji: '🖊️', description: 'Quatre couleurs, mille idées.', teinte: 'violet' },
+    { code: 'cahier', nom: 'Le Cahier', rarete: 'commune', emoji: '📓', description: 'Le compagnon des bons jours.', teinte: 'orange' },
+    { code: 'regle', nom: 'La Règle', rarete: 'commune', emoji: '📏', description: 'Toujours droit dans ses bottes.', teinte: 'bleu' },
+    { code: 'compas', nom: 'Le Compas', rarete: 'rare', emoji: '🧭', description: 'Ne perd jamais le nord.', teinte: 'vert' },
+    { code: 'calculatrice', nom: 'La Calculatrice', rarete: 'rare', emoji: '🧮', description: 'Compte les points mieux que personne.', teinte: 'violet' },
+    { code: 'dictionnaire', nom: 'Le Dictionnaire', rarete: 'rare', emoji: '📚', description: 'Les mots justes, au bon moment.', teinte: 'orange' },
+    { code: 'trophee', nom: 'Le Trophée', rarete: 'epique', emoji: '🏆', description: 'Pour celles et ceux qui n’abandonnent pas.', teinte: 'or' },
+    { code: 'medaille', nom: 'La Médaille', rarete: 'epique', emoji: '🥇', description: 'Le mérite se voit de loin.', teinte: 'or' },
+    { code: 'couronne', nom: 'La Couronne', rarete: 'legendaire', emoji: '👑', description: 'Réservée aux légendes de la classe.', teinte: 'rose' },
+    { code: 'etoile', nom: 'L’Étoile de Classe', rarete: 'legendaire', emoji: '🌟', description: 'Une sur cent, comme les vrais champions.', teinte: 'rose' }
+  ];
+
+  var demoCartes = { cartable: 2, gomme: 1, compas: 1 };
+  var demoPaquet = null;      /* date ISO du dernier paquet ouvert */
+  var demoEssais = [];        /* { prenom, ok, agent, at } */
+
   var rpc = {
+    /* --- Cartes ------------------------------------------------------- */
+    cards_catalogue: function () {
+      return CATALOGUE_DEMO.map(function (carte, index) {
+        return {
+          id: index + 1, code: carte.code, nom: carte.nom, rarete: carte.rarete,
+          emoji: carte.emoji, description: carte.description, teinte: carte.teinte
+        };
+      });
+    },
+    my_cards: function () {
+      var cartes = Object.keys(demoCartes).filter(function (code) { return demoCartes[code] > 0; })
+        .map(function (code) {
+          var carte = CATALOGUE_DEMO.filter(function (c) { return c.code === code; })[0];
+          return {
+            code: carte.code, nom: carte.nom, rarete: carte.rarete, emoji: carte.emoji,
+            description: carte.description, teinte: carte.teinte, quantite: demoCartes[code]
+          };
+        });
+      var peut = !demoPaquet || (Date.now() - new Date(demoPaquet).getTime()) >= 7 * 86400000;
+      return {
+        cartes: cartes,
+        possibles: CATALOGUE_DEMO.length,
+        distinctes: cartes.length,
+        paquets: demoPaquet ? 1 : 0,
+        peut_ouvrir: peut,
+        prochain: peut ? null : new Date(new Date(demoPaquet).getTime() + 7 * 86400000).toISOString()
+      };
+    },
+    open_card_pack: function () {
+      if (demoPaquet && (Date.now() - new Date(demoPaquet).getTime()) < 7 * 86400000) {
+        fail('PAQUET_DEJA_OUVERT');
+      }
+      var tirage = Math.floor(rand() * 100);
+      var cle = tirage < 55 ? 'commune' : tirage < 83 ? 'rare' : tirage < 95 ? 'epique' : 'legendaire';
+      var choix = CATALOGUE_DEMO.filter(function (c) { return c.rarete === cle; });
+      var carte = choix[Math.floor(rand() * choix.length)] || CATALOGUE_DEMO[0];
+      var nouvelle = !demoCartes[carte.code];
+      demoCartes[carte.code] = (demoCartes[carte.code] || 0) + 1;
+      demoPaquet = new Date().toISOString();
+      return {
+        carte: {
+          code: carte.code, nom: carte.nom, rarete: carte.rarete, emoji: carte.emoji,
+          description: carte.description, teinte: carte.teinte, quantite: demoCartes[carte.code]
+        },
+        nouvelle: nouvelle
+      };
+    },
+
+    /* --- Anti-bruteforce ---------------------------------------------- */
+    login_guard: function (args) {
+      var prenom = String(args.p_prenom || '').trim().toLowerCase();
+      var recents = demoEssais.filter(function (essai) {
+        return essai.prenom.toLowerCase() === prenom && !essai.ok &&
+          Date.now() - new Date(essai.at).getTime() < 15 * 60000;
+      });
+      var dernier = recents.length ? new Date(recents[recents.length - 1].at).getTime() : 0;
+      return {
+        bloque: recents.length >= 5,
+        echecs: recents.length,
+        restant_secondes: recents.length >= 5 ? Math.max(0, Math.round((dernier + 15 * 60000 - Date.now()) / 1000)) : 0,
+        max: 5
+      };
+    },
+    log_login_attempt: function (args) {
+      demoEssais.push({
+        prenom: String(args.p_prenom || ''),
+        ok: !!args.p_ok,
+        agent: String(args.p_agent || ''),
+        at: new Date().toISOString()
+      });
+      if (demoEssais.length > 200) demoEssais = demoEssais.slice(-200);
+      return null;
+    },
+    admin_login_attempts: function () {
+      if (!db.demoAdmin) fail('INTERDIT');
+      var parPrenom = {};
+      demoEssais.forEach(function (essai) {
+        var cle = essai.prenom.toLowerCase();
+        if (!parPrenom[cle]) parPrenom[cle] = { prenom: essai.prenom, echecs: 0, succes: 0, dernier: essai.at, bloque: false };
+        if (essai.ok) parPrenom[cle].succes += 1;
+        else parPrenom[cle].echecs += 1;
+        if (essai.at > parPrenom[cle].dernier) parPrenom[cle].dernier = essai.at;
+        parPrenom[cle].bloque = parPrenom[cle].echecs >= 5;
+      });
+      return {
+        liste: demoEssais.slice().reverse().map(function (essai) {
+          return { prenom: essai.prenom, ok: essai.ok, agent: essai.agent, at: essai.at };
+        }),
+        essais: Object.keys(parPrenom).map(function (cle) { return parPrenom[cle]; })
+          .filter(function (ligne) { return ligne.echecs > 0; })
+      };
+    },
+    admin_clear_login_attempts: function () {
+      var n = demoEssais.length;
+      demoEssais = [];
+      return n;
+    },
+
+    /* --- Rapport de climat -------------------------------------------- */
+    climat_report: function () {
+      var maintenant = Date.now();
+      var depuis7 = classMessages.filter(function (m) {
+        return maintenant - new Date(m.created_at).getTime() < 7 * 86400000;
+      });
+      var depuis30 = classMessages.filter(function (m) {
+        return maintenant - new Date(m.created_at).getTime() < 30 * 86400000;
+      });
+      var drapeaux7 = depuis7.filter(function (m) { return m.flagged; }).length;
+
+      var familles = {};
+      depuis30.filter(function (m) { return m.flagged; }).forEach(function (m) {
+        var cle = m.motif || (m.categories && m.categories[0]) || 'autre';
+        familles[cle] = (familles[cle] || 0) + 1;
+      });
+
+      var cibles = {};
+      depuis30.filter(function (m) { return m.flagged && m.cible; }).forEach(function (m) {
+        if (!cibles[m.cible]) cibles[m.cible] = { cible: m.cible, messages: 0, auteurs: {} };
+        cibles[m.cible].messages += 1;
+        cibles[m.cible].auteurs[m.author_id] = 1;
+      });
+
+      var score = depuis7.length
+        ? Math.max(0, Math.min(100, Math.round(100 * (1 - drapeaux7 / depuis7.length))))
+        : 100;
+
+      return {
+        genere_le: new Date().toISOString(),
+        score: score,
+        messages_7j: depuis7.length,
+        drapeaux_7j: drapeaux7,
+        familles: Object.keys(familles).map(function (cle) {
+          return { famille: cle, nombre: familles[cle] };
+        }).sort(function (a, b) { return b.nombre - a.nombre; }),
+        cibles: Object.keys(cibles).map(function (cle) {
+          return { cible: cle, messages: cibles[cle].messages, auteurs: Object.keys(cibles[cle].auteurs).length };
+        }).sort(function (a, b) { return b.messages - a.messages; }),
+        paires: [],
+        signalements_30j: (typeof reports !== 'undefined' ? reports.length : 0),
+        comptes: profiles.length,
+        suspendus: profiles.filter(function (p) { return p.banned_at; }).length
+      };
+    },
+
     claim_staff_code: function () { return 'demo-token'; },
     release_staff_code: function () { return true; },
     activate_account: function (args) { return { id: String(args.p_prenom), prenom: args.p_prenom, role: args.p_role, points: 0 }; },
@@ -956,7 +1120,6 @@
       var target = byId(args.p_target);
       if (!me || (me.role !== 'delegue' && !(me.role === 'suppleant' && settings.suppleant_can_award))) fail('INTERDIT');
       if (!target) fail('ELEVE_INTROUVABLE');
-      if (target.role !== 'eleve') fail('CIBLE_INVALIDE');
       if (!args.p_amount || args.p_amount < settings.award_min || args.p_amount > settings.award_max) fail('MONTANT_INVALIDE');
 
       var dore = settings.golden_until && new Date(settings.golden_until) > new Date();
@@ -1008,8 +1171,6 @@
       var target = byId(args.p_target);
       if (!me) fail('NON_CONNECTE');
       if (!target) fail('ELEVE_INTROUVABLE');
-      if (me.role !== 'eleve') fail('INTERDIT');
-      if (target.role !== 'eleve') fail('CIBLE_INVALIDE');
       if (target.id === me.id) fail('CIBLE_INVALIDE');
       if (!args.p_amount || args.p_amount < settings.transfer_min) fail('MONTANT_INVALIDE');
       if (me.points < args.p_amount) fail('POINTS_INSUFFISANTS');
