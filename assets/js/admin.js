@@ -499,9 +499,16 @@
         };
       });
     } else if (cle === 'connexions') {
-      taches = rpc('admin_login_attempts', { p_limit: 80 }).then(function (res) {
-        if (res.error) throw res.error;
-        return res.data || {};
+      /* Journal des tentatives + IP/appareil des sessions ouvertes. */
+      taches = Promise.all([
+        rpc('admin_login_attempts', { p_limit: 80 }),
+        rpc('admin_connexions', { p_limit: 60 })
+      ]).then(function (res) {
+        if (res[0].error) throw res[0].error;
+        var journal = res[0].data || {};
+        journal.sessions = res[1].error ? [] : (res[1].data || []);
+        journal.sessionsErreur = res[1].error ? messageErreur(res[1].error) : null;
+        return journal;
       });
     } else {
       taches = Promise.resolve({});
@@ -793,6 +800,7 @@
     var donnees = boite.donnees || {};
     var essais = donnees.essais || [];
     var liste = donnees.liste || [];
+    var sessions = donnees.sessions || [];
 
     var secEssais = UI.el('div', { class: 'panel' });
     secEssais.appendChild(UI.el('div', { class: 'panel-head' }, [
@@ -852,6 +860,39 @@
     }
     secJournal.appendChild(UI.el('div', { class: 'panel-body panel-body--flush' }, [table]));
     hote.appendChild(secJournal);
+
+    /* IP + appareil de chaque session ouverte : c'est la seule trace d'IP
+       conservée par Supabase, et elle disparaît avec le compte. */
+    var secSessions = UI.el('div', { class: 'panel' });
+    secSessions.appendChild(UI.el('div', { class: 'panel-head' }, [
+      UI.el('div', {}, [
+        UI.el('div', { class: 'panel-title' }, [
+          UI.el('span', {}, [UI.icon('eye', { size: 16 })]),
+          document.createTextNode(' IP des sessions')
+        ]),
+        UI.el('div', { class: 'panel-sub', text: donnees.sessionsErreur
+          ? donnees.sessionsErreur
+          : sessions.length + ' session' + (sessions.length > 1 ? 's' : '') + ' · dernière adresse connue de chaque compte' })
+      ])
+    ]));
+
+    var tableSessions = UI.el('div', { class: 'admin-table' });
+    if (!sessions.length) {
+      tableSessions.appendChild(UI.el('div', { class: 'empty-text', style: { padding: '14px' },
+        text: donnees.sessionsErreur ? 'Indisponible.' : 'Aucune session ouverte pour le moment.' }));
+    } else {
+      sessions.forEach(function (ligne) {
+        tableSessions.appendChild(UI.el('div', { class: 'admin-table-ligne' }, [
+          UI.el('span', { class: 'admin-table-nom', text: ligne.prenom || '—' }),
+          UI.el('span', { class: 'pill pill--muted', text: ligne.role || '—' }),
+          UI.el('code', { style: { fontSize: '.82rem' }, text: ligne.ip || 'IP inconnue' }),
+          UI.el('span', { class: 'admin-table-agent', title: ligne.agent || '', text: agentCourt(ligne.agent) }),
+          UI.el('span', { class: 'faint', text: dateCourte(ligne.session_created) })
+        ]));
+      });
+    }
+    secSessions.appendChild(UI.el('div', { class: 'panel-body panel-body--flush' }, [tableSessions]));
+    hote.appendChild(secSessions);
   }
 
   function agentCourt(agent) {

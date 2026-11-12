@@ -80,6 +80,14 @@ python3 -m http.server 8080
 | **Rapport de climat** | onglet **Climat de la classe** (encadrement) + Admin → Climat | score, familles, personnes visées, paires en conflit → export CSV et impression PDF |
 | **QR code de partage** | Connexion, Profil | QR fabriqué sur l’appareil par `assets/vendor/qrcode.js`, aucun service externe, marche hors-ligne |
 
+### Nouveautés 2.9.2
+- **Voir l'IP des connexions** (migration 0022) : la fonction `admin_connexions()`
+  expose, pour l'administration, l'IP et l'appareil de chaque session ouverte
+  (`auth.sessions`), avec la date. L'onglet **Admin → Connexions** affiche un
+  panneau « IP des sessions ». C'est la seule trace d'IP conservée par
+  Supabase — et elle **disparaît avec le compte** quand on le supprime, d'où
+  l'intérêt de la lire avant toute suppression.
+
 ### Nouveautés 2.9.1
 - **Les délégués et les suppléants gagnent aussi des points** (migration 0020).
   `award_points()`, `remove_points()` et `transfer_points()` ne réservent plus

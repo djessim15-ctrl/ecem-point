@@ -577,6 +577,21 @@
           .filter(function (ligne) { return ligne.echecs > 0; })
       };
     },
+    admin_connexions: function () {
+      if (!db.demoAdmin) fail('INTERDIT');
+      /* Adresses fictives, stables d'un rechargement à l'autre. */
+      return db.profiles.map(function (profil, index) {
+        return {
+          prenom: profil.prenom,
+          role: profil.role,
+          ip: '192.168.1.' + (10 + (index % 40)),
+          agent: 'Démo · appareil ' + (index % 3 === 0 ? 'Android' : index % 3 === 1 ? 'iPhone' : 'Windows'),
+          session_created: profil.last_seen_at || new Date().toISOString(),
+          session_refreshed: null,
+          derniere_connexion: profil.last_seen_at || null
+        };
+      });
+    },
     admin_clear_login_attempts: function () {
       var n = demoEssais.length;
       demoEssais = [];
